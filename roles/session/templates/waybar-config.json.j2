@@ -1,0 +1,42 @@
+{
+    "layer": "{{ waybar_layer }}",
+    "position": "top",
+    "height": 40,
+    "modules-left": ["image#logo", "custom/brand", "custom/hint"],
+    "modules-right": ["clock", "custom/host", {% if waybar_usb_button | bool %}"custom/usb", {% endif %}"custom/reset"],
+    "image#logo": {
+        "path": "/opt/kiosk/homepage/assets/{{ kiosk_logo_light }}",
+        "size": 28,
+        "tooltip": false
+    },
+    "custom/brand": {
+        "format": "{{ text_bar_brand }}",
+        "tooltip": false
+    },
+    "custom/hint": {
+        "format": "<span color='{{ color_accent }}'></span>  {{ text_bar_hint }}",
+        "tooltip": false
+    },
+    "clock": {
+        "format": "{{ text_bar_clock }}",
+        "tooltip": false
+    },
+    "custom/host": {
+        "exec": "cat /proc/sys/kernel/hostname",
+        "interval": "once",
+        "format": "{{ text_bar_host }}",
+        "tooltip": false
+    },
+{% if waybar_usb_button | bool %}
+    "custom/usb": {
+        "format": "  {{ text_bar_usb }}",
+        "on-click": "firefox-esr --profile {{ kiosk_home }}/.mozilla/firefox/kiosk http://127.0.0.1:8080/",
+        "tooltip": false
+    },
+{% endif %}
+    "custom/reset": {
+        "format": "  {{ text_bar_reset }}",
+        "on-click": "/usr/local/bin/kiosk-reset.sh",
+        "tooltip": false
+    }
+}

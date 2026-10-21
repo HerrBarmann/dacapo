@@ -1,0 +1,31 @@
+---
+- name: Update ca certificates
+  ansible.builtin.command: update-ca-certificates
+  changed_when: true
+
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: not in_chroot | bool
+
+# Restart the timers after a changed schedule so the next run is recomputed
+# right away (runs after "Reload systemd").
+- name: Restart apt timers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: restarted
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+  when: not in_chroot | bool
+
+- name: Restart ssh
+  ansible.builtin.systemd_service:
+    name: ssh
+    state: restarted
+  when: not in_chroot | bool
+
+- name: Reload networkmanager connections
+  ansible.builtin.command: nmcli connection reload
+  changed_when: true
+  when: not in_chroot | bool

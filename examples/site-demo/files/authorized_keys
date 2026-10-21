@@ -1,0 +1,5 @@
+# Admin SSH keys of this site — one key per line, name above it. The file is
+# deployed as a whole: delete a line, commit, and that admin loses access with
+# the next pull. Replace the demo key below with your own.
+# demo-admin (placeholder key, not usable)
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA demo-admin@example.org

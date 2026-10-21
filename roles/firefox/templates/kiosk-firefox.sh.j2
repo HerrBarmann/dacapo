@@ -1,0 +1,160 @@
+#!/bin/bash
+# kiosk-firefox.sh — Jinja2 template (roles/firefox, deployed by ansible-pull).
+# Profile "{{ kiosk_profile }}", mode "{{ firefox_mode }}".
+# Starts Firefox for the kiosk session with a fresh, prepared profile.
+#
+# Why a prepared profile: Firefox activates language packs only from the
+# SECOND start of a profile on, and force-installed extensions have to be
+# installed into the profile first. An invisible headless run does that ONCE
+# per boot and produces a profile template. Every session then only gets a
+# copy of that template — the restart after "end session" takes seconds.
+#
+# The template never contains user data: it is created without a window on
+# about:blank and only read, never written back. It lives in the RAM home
+# (tmpfs) and is gone after every reboot.
+#
+# Explicit --profile: since Firefox 147 new profiles live under
+# ~/.config/mozilla instead of ~/.mozilla (XDG). With a fixed path
+# userChrome.css/user.js are guaranteed to land in the profile Firefox uses.
+#
+# New extension? firefox_extensions in the site/profile.
+set -u
+
+EXPECTED_XPI={{ firefox_expected_xpi }}
+TEMPLATE="$HOME/.cache/kiosk-ff-template"
+PROFILE="$HOME/.mozilla/firefox/kiosk"
+START=$(date +%s)
+
+log() { logger -t kiosk-firefox "$*"; }
+
+{% if firefox_firstrun_ids | length > 0 %}
+# Extensions that must have saved their first-run storage (otherwise they
+# show a welcome page in EVERY session).
+FIRSTRUN_IDS=({% for id in firefox_firstrun_ids %}"{{ id }}"{{ ' ' if not loop.last }}{% endfor %})
+
+{% endif %}
+# Kill PID and wait at most $2 seconds for a clean exit, then force it.
+# Returns 0 = clean exit, 1 = had to be killed.
+# (An unbounded "wait" used to leave a white screen for minutes.)
+stop_pid() {
+    kill "$1" 2>/dev/null
+    for _ in $(seq 1 $(( $2 * 2 ))); do
+        kill -0 "$1" 2>/dev/null || return 0
+        sleep 0.5
+    done
+    kill -9 "$1" 2>/dev/null
+    return 1
+}
+
+xpi_count() { ls "$1"/extensions/*.xpi 2>/dev/null | wc -l; }
+extensions_ready() { [ -f "$PROFILE/extensions.json" ] && [ "$(xpi_count "$PROFILE")" -ge "$EXPECTED_XPI" ]; }
+
+{% if firefox_firstrun_ids | length > 0 %}
+# Did the extension save its first run in the profile? Its internal UUID is in
+# prefs.js after a clean shutdown, its storage under
+# storage/default/moz-extension+++<uuid>.
+firstrun_saved() {
+    local id uuid
+    for id in "${FIRSTRUN_IDS[@]}"; do
+        uuid=$(grep -o "$id"'\\":\\"[0-9a-f-]*' "$PROFILE/prefs.js" 2>/dev/null | grep -o '[0-9a-f-]\{36\}$')
+        [ -n "$uuid" ] && ls -d "$PROFILE/storage/default/moz-extension+++$uuid"* >/dev/null 2>&1 || return 1
+    done
+    return 0
+}
+
+{% endif %}
+# Start Firefox invisibly in the profile until the extensions are installed,
+# give them $1 seconds for their first run and then exit CLEANLY. A hard kill
+# would discard storage the extensions have not flushed yet.
+headless_pass() {
+    firefox-esr --headless --no-remote --profile "$PROFILE" about:blank >/dev/null 2>&1 &
+    local warm=$!
+    for _ in $(seq 1 50); do      # up to ~25 s for the installation
+        extensions_ready && break
+        sleep 0.5
+    done
+    sleep "$1"
+    stop_pid "$warm" 30 || log "helper Firefox did not react for 30 s and was killed"
+    rm -f "$PROFILE/lock" "$PROFILE/.parentlock"
+}
+
+# The template is created at the session profile path ($PROFILE) and saved
+# from there: Firefox stores absolute extension paths in the profile — every
+# later copy ends up at the same path.
+build_template() {
+    mkdir -p "$PROFILE"
+{% if firefox_hide_chrome | bool %}
+    # Hide the complete browser chrome (mode "app"). Deliberately no --kiosk:
+    # its chrome hiding depends on fullscreen, which would cover the waybar.
+    # Shortcuts like Ctrl+L still work "into the invisible", but foreign
+    # targets are blocked by the WebsiteFilter in policies.json.
+    # userChrome.css is only loaded if this preference is set at start —
+    # policies.json locks it too, user.js is the second safeguard because it
+    # is guaranteed to apply before the chrome is built.
+    mkdir -p "$PROFILE/chrome"
+    cat > "$PROFILE/user.js" <<'USERJS'
+user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
+USERJS
+    cat > "$PROFILE/chrome/userChrome.css" <<'USERCHROME'
+#navigator-toolbox,
+#TabsToolbar,
+#nav-bar,
+#PersonalToolbar,
+#sidebar-main,
+#sidebar-box,
+#sidebar-splitter {
+    visibility: collapse !important;
+}
+USERCHROME
+{% endif %}
+    headless_pass 8
+{% if firefox_firstrun_ids | length > 0 %}
+    if extensions_ready && ! firstrun_saved; then
+        log "extension first run not saved — second pass"
+        headless_pass 10
+        firstrun_saved \
+            || log "WARNING: extension first run still not saved — welcome page possible"
+    fi
+{% endif %}
+    if extensions_ready; then
+        rm -rf "$TEMPLATE" "$TEMPLATE.tmp"
+        cp -a "$PROFILE" "$TEMPLATE.tmp" && mv "$TEMPLATE.tmp" "$TEMPLATE"
+        log "profile template created in $(( $(date +%s) - START )) s"
+    else
+        log "WARNING: profile template incomplete ($(xpi_count "$PROFILE") of $EXPECTED_XPI extensions) — starting without template"
+    fi
+}
+
+mkdir -p "$HOME/.cache"
+# Never two starts at once (e.g. "end session" while the template is being built).
+exec 9>"$HOME/.cache/kiosk-firefox.lock"
+flock 9
+
+# If an earlier start already opened a window (reset triggered twice), end it
+# — there is always exactly one session.
+if pgrep -u "$(id -u)" -x firefox-esr >/dev/null; then
+    pkill -u "$(id -u)" -x firefox-esr
+    for _ in $(seq 1 15); do
+        pgrep -u "$(id -u)" -x firefox-esr >/dev/null || break
+        sleep 0.2
+    done
+    pkill -9 -u "$(id -u)" -x firefox-esr 2>/dev/null
+fi
+
+rm -rf "$HOME/.mozilla"
+mkdir -p "$HOME/.mozilla/firefox"
+if [ -d "$TEMPLATE" ]; then
+    cp -a "$TEMPLATE" "$PROFILE"
+else
+    # First start after boot: create the template. The prepared profile is
+    # used directly by this first session as well.
+    build_template
+fi
+
+log "session start after $(( $(date +%s) - START )) s"
+flock -u 9
+exec 9>&-
+# No --no-remote: the "USB drive" bar button opens a tab in the running window
+# through the same --profile path.
+# Worst case (without template) English UI — but never a dead kiosk.
+exec firefox-esr --profile "$PROFILE" {{ firefox_launch_args }} {{ kiosk_homepage }}

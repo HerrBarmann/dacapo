@@ -1,0 +1,37 @@
+#!/bin/bash
+# kiosk-idle-warn.sh — idle warning as a centred popup with countdown.
+# (Jinja2 template roles/session/templates/kiosk-idle-warn.sh.j2)
+# Called by swayidle {{ idle_warn_seconds }} s before the session reset (in
+# the background, see /etc/sway/config). Refreshes the message every second
+# through the same notification (mako). On input swayidle (resume) kills this
+# script and closes the popup. Texts: text_idle_* in the site.
+set -u
+
+SECS={{ idle_warn_seconds }}
+ICON=/opt/kiosk/homepage/assets/{{ kiosk_logo_light }}
+RED_FROM={{ [idle_warn_seconds | int, 10] | min }}   # from here on: danger border (urgency critical)
+TITLE='{{ text_idle_title | replace("'", "'\\''") }}'
+BODY='{{ text_idle_body | replace("'", "'\\''") }}'
+HINT='{{ text_idle_hint | replace("'", "'\\''") }}'
+UNIT_ONE='{{ text_idle_second | replace("'", "'\\''") }}'
+UNIT_MANY='{{ text_idle_seconds | replace("'", "'\\''") }}'
+
+log() { logger -t kiosk-idle-warn "$*"; }
+
+# Replace {seconds} and {unit} in the site texts.
+body() {
+    local s="$1" unit="$UNIT_MANY" main="$BODY" hint="$HINT"
+    [ "$s" -eq 1 ] && unit="$UNIT_ONE"
+    main=${main//\{seconds\}/$s}; main=${main//\{unit\}/$unit}
+    hint=${hint//\{seconds\}/$s}; hint=${hint//\{unit\}/$unit}
+    printf '<span size="large">%s</span>\n<span size="small" foreground="{{ color_bar_muted | lower }}">%s</span>' "$main" "$hint"
+}
+urgency() { [ "$1" -le "$RED_FROM" ] && echo critical || echo normal; }
+
+ID=$(notify-send --print-id -a kiosk -i "$ICON" -u "$(urgency "$SECS")" "$TITLE" "$(body "$SECS")") \
+    || { log "notify-send failed — is mako running?"; exit 0; }
+for (( s = SECS - 1; s >= 1; s-- )); do
+    sleep 1
+    notify-send --replace-id "$ID" -a kiosk -i "$ICON" -u "$(urgency "$s")" "$TITLE" "$(body "$s")" || exit 0
+done
+exit 0

@@ -1,0 +1,3 @@
+---
+# Role monitor — local display service for digital signage (profile type
+# "display"). Variables: monitor_* in vars/defaults.yml.

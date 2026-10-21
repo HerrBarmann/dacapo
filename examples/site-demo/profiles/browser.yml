@@ -1,0 +1,79 @@
+---
+# ============================================================================
+# Profile "browser" — public research/booking computer.
+# Firefox with visible address and bookmark bar, managed bookmarks, USB drives,
+# screensaver, reset after 10 minutes of inactivity.
+# ============================================================================
+kiosk_profile_title: "Demo Kiosk — Public computer"
+hostname_prefix: kiosk                    # devices are named kiosk-<MAC suffix>
+
+# ---- Session -----------------------------------------------------------------
+idle_reset_enabled: true
+idle_seconds: 600
+idle_warn_seconds: 60
+screensaver_enabled: true                 # images from wallpaper/<WxH>/
+screensaver_seconds: 900
+screen_off_enabled: true
+screen_off_seconds: 2700
+hide_cursor: false
+output_transform: normal
+
+# ---- Bar ---------------------------------------------------------------------
+waybar_enabled: true
+waybar_layer: top                         # fullscreen video may cover the bar
+text_bar_brand: "Library"
+text_bar_hint: "Everything is deleted after {{ (idle_seconds / 60) | int }} minutes without input · Save files to a USB drive"
+waybar_usb_button: true
+
+# ---- USB drives (udiskie automount + local "USB drive" page) ----------------
+usb_enabled: true
+
+# ---- Firefox -----------------------------------------------------------------
+firefox_mode: browser
+homepage_template: homepage-browser.html.j2
+fullscreen_guard_enabled: false
+monitor_enabled: false
+
+# Extensions are downloaded at pull time and force-installed (never committed).
+firefox_extensions:
+  - name: ublock-origin
+    id: "uBlock0@raymondhill.net"
+    url: "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi"
+    private_browsing: true
+
+# Single bookmarks directly in the toolbar (next to the managed folder).
+firefox_toolbar_bookmarks:
+  - { Title: "Library account", URL: "https://example.org/account", Placement: "toolbar" }
+
+# Managed bookmarks: read-only folder in the (always visible) bookmark bar.
+# Sub-folders: { name: "Folder", children: [ ... ] }
+firefox_managed_bookmarks:
+  - { toplevel_name: "Library bookmarks" }
+  - { name: "Catalogue", url: "https://example.org/catalogue" }
+  - { name: "Wikipedia", url: "https://www.wikipedia.org/" }
+  - { name: "Project Gutenberg", url: "https://www.gutenberg.org/" }
+  - { name: "USB drive (this computer)", url: "http://127.0.0.1:8080/" }
+  - { name: "Help", url: "https://example.org/help" }
+
+firefox_policies_profile:
+  # Ask where to save downloads (choose the USB drive there).
+  PromptForDownloadLocation: true
+  # Open PDFs in the browser (pdf.js) even if the server sends them as download.
+  Handlers:
+    mimeTypes:
+      application/pdf: { action: handleInternally, ask: false }
+  # Block file:// (no browsing of system files). Exceptions: home page, own
+  # session downloads, mounted USB drives.
+  WebsiteFilter:
+    Block: ["file:///*"]
+    Exceptions:
+      - "file:///opt/kiosk/*"
+      - "file://{{ kiosk_home }}/Downloads/*"
+      - "file:///media/*"
+  Preferences:
+    browser.download.open_pdf_attachments_inline: { Value: true, Status: default }
+    pdfjs.enableScripting: { Value: false, Status: locked }
+    extensions.update.enabled: { Value: false, Status: locked }
+  DisplayBookmarksToolbar: "always"
+  Bookmarks: "{{ firefox_toolbar_bookmarks }}"
+  ManagedBookmarks: "{{ firefox_managed_bookmarks }}"

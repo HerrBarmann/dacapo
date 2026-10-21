@@ -1,0 +1,51 @@
+---
+# ============================================================================
+# Profile "display" — digital signage (events board, timetable, dashboard).
+# Firefox in real kiosk mode (fullscreen, no bar, no pointer) shows a local
+# page that loads the signage content through the local display service
+# (kiosk-monitor) and swaps it flicker-free when it changes. If the network
+# fails, the last copy stays on screen. No idle reset, no screensaver — the
+# display runs around the clock; nightly reboot like every kiosk.
+#
+# Per-device settings WITHOUT a repository change: /etc/kiosk/host.yml (PC)
+# or kiosk.yml on the boot partition of the SD card (Raspberry Pi), e.g.
+#   monitor_url: "https://signage.example.org/board/2"
+#   output_transform: "90"      # portrait
+# ============================================================================
+kiosk_profile_title: "Demo Kiosk — Signage display"
+hostname_prefix: display                  # devices are named display-<MAC suffix>
+
+# ---- Session -----------------------------------------------------------------
+idle_reset_enabled: false
+screensaver_enabled: false
+screen_off_enabled: false
+hide_cursor: true                         # hide the pointer after 1 s
+output_transform: normal                  # normal | 90 | 180 | 270
+kiosk_home_tmpfs_size: 1g                 # Raspberry Pi has less RAM
+
+# ---- Bar ---------------------------------------------------------------------
+waybar_enabled: false
+usb_enabled: false
+
+# ---- Firefox -----------------------------------------------------------------
+firefox_mode: display                     # --kiosk, restarted on crash
+homepage_template: homepage-display.html.j2
+firefox_extensions: []
+fullscreen_guard_enabled: false
+
+# ---- Display service (local, 127.0.0.1) ----------------------------------------
+monitor_enabled: true
+monitor_url: "https://example.org/"
+monitor_expect: any                       # svg | html | any
+monitor_refresh_minutes: 5
+monitor_port: 8081
+
+firefox_policies_profile:
+  # Nothing but the local page and the signage server is reachable.
+  WebsiteFilter:
+    Block: ["<all_urls>"]
+    Exceptions:
+      - "file:///opt/kiosk/*"
+      - "http://127.0.0.1/*"
+      - "{{ monitor_url | regex_replace('^(https?://[^/]+).*$', '\\1') }}/*"
+  DisplayBookmarksToolbar: "never"

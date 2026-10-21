@@ -1,0 +1,18 @@
+---
+# Role base — operating system foundation of every profile. Shared variables
+# are documented in vars/defaults.yml; only package lists live here.
+# Everything from Debian main — security updates arrive via unattended-upgrades.
+kiosk_packages_base:
+  - unattended-upgrades
+  - openssh-server
+  - wpasupplicant          # Wi-Fi fallback (802.1X / PSK)
+  - ca-certificates
+  - python3
+# PC hardware only (heterogeneous Wi-Fi cards); the Raspberry Pi brings its
+# firmware with raspi-firmware.
+kiosk_packages_firmware_x86:
+  - firmware-iwlwifi
+  - firmware-realtek
+  - firmware-atheros
+# Profiles may add packages here.
+kiosk_packages_extra: []

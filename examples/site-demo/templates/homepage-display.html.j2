@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="{{ kiosk_language }}">
+<!-- Jinja2 template <site>/templates/homepage-display.html.j2 (profile "display").
+     Signage page: loads the content from the local display service
+     kiosk-monitor (127.0.0.1:{{ monitor_port }}) and swaps it only when it changed
+     (flicker-free). Until something was loaded a status page is shown; if the
+     network fails later, the last copy stays (with a timestamp after 30 min).
+     SVG content is inlined; HTML content goes into an iframe (srcdoc) with a
+     <base> so relative links resolve against the server; images are shown
+     full screen. -->
+<head>
+<meta charset="utf-8">
+<title>{{ kiosk_brand_name }} — Display</title>
+<style>
+  :root { --accent: {{ color_accent }}; --ink: #111; --muted: #5c5c5c; }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #fff; overflow: hidden; cursor: none; }
+  body { font-family: {{ kiosk_css_font_family }}; color: var(--ink); }
+  #screen svg, #screen iframe, #screen img { width: 100vw !important; height: 100vh !important; display: block; border: 0; object-fit: contain; }
+  #status { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 8vw; background: #fff; }
+  #status.hidden { display: none; }
+  #status img { width: clamp(90px, 10vw, 160px); margin-bottom: 5vh; }
+  #status h1 { font-size: clamp(36px, 6vw, 96px); font-weight: 700; line-height: 1; margin: 0; }
+  #status h1 span { color: var(--accent); }
+  #msg { margin: 4vh 0 0; font-size: clamp(18px, 2.2vw, 32px); color: var(--muted); border-left: 6px solid var(--accent); padding-left: 18px; max-width: 40em; }
+  #stale { position: fixed; right: 0; bottom: 0; padding: 6px 14px; font-size: 14px; color: #fff; background: rgba(17,17,17,.75); display: none; }
+  #stale.on { display: block; }
+</style>
+</head>
+<body>
+<div id="screen"></div>
+<div id="status">
+  <img src="assets/{{ kiosk_logo }}" alt="{{ kiosk_brand_name }}">
+  <h1>{{ kiosk_brand_name }} <span>display</span></h1>
+  <p id="msg">Connecting&hellip;</p>
+</div>
+<div id="stale"></div>
+<script>
+var SERVICE    = "http://127.0.0.1:{{ monitor_port }}/display";
+var UPSTREAM   = "{{ monitor_url }}";
+var LANG       = "{{ kiosk_language }}";
+var POLL_MS    = 30 * 1000;    /* ask the local service (cheap)              */
+var RETRY_MS   = 5 * 1000;     /* while nothing is shown yet                 */
+var STALE_MS   = 30 * 60 * 1000;
+var lastEtag = null, shown = false, fetchedAt = null;
+
+function hideBrokenImages(root) {
+  var imgs = root.querySelectorAll("image, img");
+  for (var i = 0; i < imgs.length; i++) {
+    imgs[i].addEventListener("error", function (ev) { ev.target.style.display = "none"; });
+  }
+}
+
+function setStatus(text) { document.getElementById("msg").textContent = text; }
+
+function updateStale() {
+  var el = document.getElementById("stale");
+  if (fetchedAt && Date.now() - fetchedAt > STALE_MS) {
+    var d = new Date(fetchedAt);
+    el.textContent = "Last update " + d.toLocaleDateString(LANG) + ", " +
+      d.toLocaleTimeString(LANG, { hour: "2-digit", minute: "2-digit" });
+    el.className = "on";
+  } else {
+    el.className = "";
+  }
+}
+
+function show(type, body) {
+  var container = document.getElementById("screen");
+  var base = new URL(".", UPSTREAM).href;
+  if (type.indexOf("image/svg") === 0 || /^\s*<svg/i.test(body)) {
+    var b = document.createElement("base"); b.href = base; document.head.appendChild(b);
+    container.innerHTML = body;
+    hideBrokenImages(container);
+  } else if (type.indexOf("text/html") === 0) {
+    var frame = document.createElement("iframe");
+    frame.setAttribute("sandbox", "allow-scripts allow-same-origin");
+    frame.srcdoc = body.replace(/<head([^>]*)>/i, '<head$1><base href="' + base + '">');
+    container.innerHTML = "";
+    container.appendChild(frame);
+  } else if (type.indexOf("image/") === 0) {
+    container.innerHTML = '<img src="' + SERVICE + '?' + Date.now() + '" alt="">';
+  } else {
+    container.innerHTML = "<pre>" + body.replace(/[<>&]/g, function (c) { return {"<":"&lt;",">":"&gt;","&":"&amp;"}[c]; }) + "</pre>";
+  }
+}
+
+function poll() {
+  fetch(SERVICE, { cache: "no-store" })
+    .then(function (r) {
+      if (!r.ok) { throw new Error("HTTP " + r.status); }
+      var etag = r.headers.get("ETag");
+      var at = parseInt(r.headers.get("X-Fetched-At") || "0", 10);
+      if (at) { fetchedAt = at * 1000; }
+      if (etag && etag === lastEtag) { return null; }   /* unchanged */
+      lastEtag = etag;
+      var type = (r.headers.get("Content-Type") || "").toLowerCase();
+      return r.text().then(function (text) { return { type: type, body: text }; });
+    })
+    .then(function (res) {
+      if (res !== null) {
+        show(res.type, res.body);
+        document.getElementById("status").classList.add("hidden");
+        shown = true;
+      }
+      updateStale();
+      setTimeout(poll, POLL_MS);
+    })
+    .catch(function (e) {
+      if (!shown) {
+        setStatus("Waiting for network and server (" + e.message + ") – next attempt in " + (RETRY_MS / 1000) + " s");
+      }
+      updateStale();
+      setTimeout(poll, shown ? POLL_MS : RETRY_MS);
+    });
+}
+poll();
+</script>
+</body>
+</html>

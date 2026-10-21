@@ -1,0 +1,18 @@
+# /etc/systemd/system/ansible-pull.service (deployed by ansible-pull)
+# Pulls the site repository (dacapo as submodule) and converges the device.
+# Called periodically by ansible-pull.timer -> central configuration.
+# A failed run (network down, Git server down) is harmless: the timer tries
+# again at the next interval.
+[Unit]
+Description={{ kiosk_brand_name }} ansible-pull convergence
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Read-only deploy token of the site repository (kiosk_pull_url in <site>/secrets.yml).
+ExecStart=/usr/bin/ansible-pull \
+  -U {{ kiosk_pull_url }} \
+  -i localhost, \
+  --checkout {{ kiosk_pull_branch }} \
+  {{ kiosk_pull_playbook }}

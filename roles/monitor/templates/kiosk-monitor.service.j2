@@ -1,0 +1,25 @@
+# /etc/systemd/system/kiosk-monitor.service (deployed by ansible-pull)
+# {{ kiosk_brand_name }} display service (see /opt/kiosk/kiosk-monitor.py).
+# URL/interval: profile or per-device override (kiosk_host_vars_files).
+[Unit]
+Description={{ kiosk_brand_name }} display service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+Environment="MONITOR_URL={{ monitor_url }}"
+Environment="MONITOR_REFRESH_SECONDS={{ (monitor_refresh_minutes | int) * 60 }}"
+Environment="MONITOR_PORT={{ monitor_port }}"
+Environment="MONITOR_EXPECT={{ monitor_expect }}"
+ExecStart=/usr/bin/python3 -I /opt/kiosk/kiosk-monitor.py
+Restart=always
+RestartSec=5
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

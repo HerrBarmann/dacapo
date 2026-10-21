@@ -1,0 +1,120 @@
+---
+# ============================================================================
+# Role session — sway (Wayland) as kiosk compositor, waybar, swayidle
+# (warning, reset, screensaver, screen off), site fonts and assets.
+# ============================================================================
+- name: Install session packages
+  ansible.builtin.apt:
+    name: "{{ session_packages }}"
+    state: present
+
+# ---- Site fonts (optional) ---------------------------------------------------
+# <site>/fonts/ is installed system-wide: home pages, bar and popup use it.
+# Licensed fonts belong in the (private) site repository, never in the core.
+- name: Check for site fonts
+  ansible.builtin.stat:
+    path: "{{ kiosk_site_dir }}/fonts"
+  register: _site_fonts
+  delegate_to: localhost
+  become: false
+
+- name: Site font directory
+  ansible.builtin.file:
+    path: "/usr/local/share/fonts/{{ kiosk_fonts_dir_name }}"
+    state: directory
+    mode: "0755"
+  when: _site_fonts.stat.exists
+
+- name: Install site fonts
+  ansible.builtin.copy:
+    src: "{{ kiosk_site_dir }}/fonts/"
+    dest: "/usr/local/share/fonts/{{ kiosk_fonts_dir_name }}/"
+    mode: "0644"
+  notify: Refresh font cache
+  when: _site_fonts.stat.exists
+
+# ---- Site assets (logo, decorations) ----------------------------------------
+# Shared by home pages, the bar (light logo), the popup and the USB manager.
+- name: Homepage directory
+  ansible.builtin.file:
+    path: /opt/kiosk/homepage
+    state: directory
+    mode: "0755"
+
+- name: Site assets
+  ansible.builtin.copy:
+    src: "{{ kiosk_site_dir }}/assets/"
+    dest: /opt/kiosk/homepage/assets/
+    mode: "0644"
+
+# ---- sway --------------------------------------------------------------------
+- name: /etc/sway directory
+  ansible.builtin.file:
+    path: /etc/sway
+    state: directory
+    mode: "0755"
+
+- name: Sway config
+  ansible.builtin.template:
+    src: sway-config.j2
+    dest: /etc/sway/config
+    mode: "0644"
+
+# ---- waybar ------------------------------------------------------------------
+- name: Waybar config directory
+  ansible.builtin.file:
+    path: /etc/xdg/waybar
+    state: directory
+    mode: "0755"
+
+- name: Waybar config
+  ansible.builtin.template:
+    src: waybar-config.json.j2
+    dest: /etc/xdg/waybar/config
+    mode: "0644"
+  notify: Reload waybar
+  when: waybar_enabled | bool
+
+- name: Waybar style
+  ansible.builtin.template:
+    src: waybar-style.css.j2
+    dest: /etc/xdg/waybar/style.css
+    mode: "0644"
+  notify: Reload waybar
+  when: waybar_enabled | bool
+
+# ---- Idle warning popup (mako) -------------------------------------------------
+# Centred popup with countdown. mako draws on the overlay layer; the script
+# updates the text every second, swayidle kills it on input.
+- name: Mako config directory
+  ansible.builtin.file:
+    path: /etc/xdg/mako
+    state: directory
+    mode: "0755"
+
+- name: Mako config (popup in site colours)
+  ansible.builtin.template:
+    src: mako-config.j2
+    dest: /etc/xdg/mako/config
+    mode: "0644"
+  when: idle_reset_enabled | bool
+
+- name: Idle warning script (countdown popup)
+  ansible.builtin.template:
+    src: kiosk-idle-warn.sh.j2
+    dest: /usr/local/bin/kiosk-idle-warn.sh
+    mode: "0755"
+  when: idle_reset_enabled | bool
+
+- name: Remove idle warning (profile without idle reset)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/xdg/mako/config
+    - /usr/local/bin/kiosk-idle-warn.sh
+  when: not idle_reset_enabled | bool
+
+# ---- Screensaver -------------------------------------------------------------
+- name: Screensaver
+  ansible.builtin.include_tasks: screensaver.yml

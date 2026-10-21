@@ -1,0 +1,24 @@
+Da capo (dacapo) — Debian kiosk and digital-signage toolkit for ansible-pull
+Copyright (C) 2026 Dennis Bormann (GitHub: HerrBarmann)
+              and Hochschule für Musik und Theater Hamburg (HfMT), ITSC
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License (LICENSE) for
+more details.
+
+Attribution: when you redistribute this software or run a modified version
+for users over a network (section 13 of the AGPL), keep this notice and name
+the origin: "based on dacapo by Dennis Bormann (HerrBarmann) and the
+Hochschule für Musik und Theater Hamburg, ITSC — https://github.com/HerrBarmann/dacapo". Site repositories that
+only use dacapo as a Git submodule and keep their own configuration are
+not required to be published.
+
+The demo logo and wallpapers in examples/site-demo are generated and may be
+reused freely. Fonts, logos and other material in a site repository keep
+their own licences.

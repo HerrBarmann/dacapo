@@ -1,0 +1,17 @@
+# /etc/wpa_supplicant/kiosk-wlan.conf — Wi-Fi fallback of the kiosk fleet.
+# Rename to wpa-kiosk-wlan.conf and set wlan_fallback_enabled: true in
+# site.yml. The file is deployed 0600 root:root. NetworkManager systems
+# (Raspberry Pi OS) get a connection derived from the same values.
+ap_scan=1
+network={
+    ssid="ExampleWiFi"
+    # --- WPA2/WPA3 personal: ---
+    key_mgmt=WPA-PSK
+    psk="CHANGE_ME"
+    # --- or WPA2 Enterprise (device account): ---
+    # key_mgmt=WPA-EAP
+    # eap=TTLS
+    # identity="kiosk-device"
+    # password="CHANGE_ME"
+    # phase2="auth=PAP"
+}

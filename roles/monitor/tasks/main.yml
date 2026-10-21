@@ -1,0 +1,32 @@
+---
+# ============================================================================
+# Role monitor — kiosk-monitor.service: fetches the signage page periodically
+# from the server, keeps the last good copy and serves it to the local home
+# page on 127.0.0.1:{{ monitor_port }}. Runs as a system service
+# (DynamicUser), independent of the session.
+# ============================================================================
+- name: Display service script
+  ansible.builtin.copy:
+    src: kiosk-monitor.py
+    dest: /opt/kiosk/kiosk-monitor.py
+    mode: "0755"
+  notify: Restart kiosk-monitor
+
+- name: Display service unit
+  ansible.builtin.template:
+    src: kiosk-monitor.service.j2
+    dest: /etc/systemd/system/kiosk-monitor.service
+    mode: "0644"
+  notify: Restart kiosk-monitor
+
+- name: Enable kiosk-monitor.service
+  ansible.builtin.command: systemctl enable kiosk-monitor.service  # noqa: command-instead-of-module (chroot-safe)
+  args:
+    creates: /etc/systemd/system/multi-user.target.wants/kiosk-monitor.service
+
+- name: Start kiosk-monitor.service (running system only)
+  ansible.builtin.systemd_service:
+    name: kiosk-monitor.service
+    state: started
+    daemon_reload: true
+  when: not in_chroot | bool

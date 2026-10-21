@@ -1,0 +1,47 @@
+#!/bin/bash
+# kiosk-reset.sh — Jinja2 template (roles/firefox, deployed by ansible-pull).
+# Resets the kiosk session to a clean state.
+# Triggered by: swayidle ({{ idle_seconds }} s idle) OR the "end session"
+# button in the waybar{{ '' if idle_reset_enabled | bool else ' (in this profile only by hand, e.g. via SSH)' }}.
+#
+# Firefox runs in permanent private browsing and {{ kiosk_home }} is on tmpfs,
+# so hardly anything persists anyway. This script ends Firefox, removes
+# volatile profile leftovers and restarts the browser cleanly.
+set -u
+
+# Close a running idle warning (countdown popup). makoctl needs the session
+# bus (works from waybar/swayidle); otherwise the popup disappears after the
+# default-timeout of the mako config on its own.
+pkill -u {{ kiosk_user }} -f kiosk-idle-warn.sh 2>/dev/null
+makoctl dismiss -a 2>/dev/null
+
+# End Firefox (all instances of the kiosk user). Wait at most 3 s for a clean
+# exit, then force it.
+pkill -u {{ kiosk_user }} -x firefox-esr 2>/dev/null
+for _ in $(seq 1 15); do
+    pgrep -u {{ kiosk_user }} -x firefox-esr >/dev/null || break
+    sleep 0.2
+done
+pkill -9 -u {{ kiosk_user }} -x firefox-esr 2>/dev/null
+
+# Remove volatile profile/cache leftovers in the tmpfs home — including the
+# XDG paths Firefox uses since version 147 instead of ~/.mozilla. The profile
+# template under .cache/kiosk-ff-template is kept on purpose (no user data,
+# makes the restart fast).
+rm -rf {{ kiosk_home }}/.mozilla {{ kiosk_home }}/.config/mozilla \
+       {{ kiosk_home }}/.cache/mozilla {{ kiosk_home }}/Downloads 2>/dev/null
+
+{% if firefox_mode == 'display' %}
+# Profile without bar: Firefox runs in a restart loop (/etc/sway/config) —
+# after exiting it comes back on its own.
+exit 0
+{% else %}
+# Restart Firefox (into the running sway session) — the start wrapper copies
+# the prepared profile template. Find the SWAYSOCK of the kiosk user.
+SOCK=$(ls /run/user/$(id -u {{ kiosk_user }})/sway-ipc.*.sock 2>/dev/null | head -n1)
+if [ -n "${SOCK:-}" ]; then
+    SWAYSOCK="$SOCK" swaymsg exec '/usr/local/bin/kiosk-firefox.sh'
+fi
+
+exit 0
+{% endif %}

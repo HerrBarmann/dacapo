@@ -1,0 +1,13 @@
+# /etc/systemd/system/nightly-reboot.timer (deployed by ansible-pull)
+# Every night at {{ nightly_reboot_time }} local time (nightly_reboot_time).
+# Persistent=false: a device that is off at that time does not catch up —
+# it boots fresh anyway when switched on.
+[Unit]
+Description={{ kiosk_brand_name }} nightly reboot timer
+
+[Timer]
+OnCalendar=*-*-* {{ nightly_reboot_time }}:00
+Persistent=false
+
+[Install]
+WantedBy=timers.target

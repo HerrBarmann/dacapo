@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Demo mark of dacapo: ring with a bar. Replace with your logo. -->
+  <circle cx="512" cy="512" r="400" fill="none" stroke="#ffffff" stroke-width="112"/>
+  <rect x="430" y="307" width="164" height="410" fill="#ffffff"/>
+</svg>

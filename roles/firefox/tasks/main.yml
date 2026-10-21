@@ -1,0 +1,105 @@
+---
+# ============================================================================
+# Role firefox — Firefox ESR from Debian main (security updates via
+# unattended-upgrades), enterprise policies, profile template, home page.
+# ============================================================================
+- name: Install Firefox
+  ansible.builtin.apt:
+    name: "{{ firefox_packages }}"
+    state: present
+
+# ---- Enterprise policy -------------------------------------------------------
+# Written to BOTH possible policy paths: depending on the build Firefox reads
+# /etc/firefox or /etc/firefox-esr. Harmless, guarantees it is found.
+# Verify: about:policies (browser mode) or the JSON check in docs/operations.md.
+- name: Firefox policy directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /etc/firefox/policies
+    - /etc/firefox-esr/policies
+
+- name: Deploy policies.json (common + site + profile policies)
+  ansible.builtin.copy:
+    content: "{{ {'policies': firefox_policies} | to_nice_json(indent=2) }}\n"
+    dest: "{{ item }}/policies.json"
+    mode: "0644"
+  loop:
+    - /etc/firefox/policies
+    - /etc/firefox-esr/policies
+
+# ---- Start and reset scripts ------------------------------------------------
+- name: Start wrapper with profile template
+  ansible.builtin.template:
+    src: kiosk-firefox.sh.j2
+    dest: /usr/local/bin/kiosk-firefox.sh
+    mode: "0755"
+
+- name: Reset script
+  ansible.builtin.template:
+    src: kiosk-reset.sh.j2
+    dest: /usr/local/bin/kiosk-reset.sh
+    mode: "0755"
+
+# Watchdog against fullscreen (F11, JavaScript fullscreen API): keeps the bar
+# with the "end session" button visible (details in the script header).
+- name: Fullscreen watchdog
+  ansible.builtin.copy:
+    src: kiosk-fullscreen-watch.sh
+    dest: /usr/local/bin/kiosk-fullscreen-watch.sh
+    mode: "0755"
+  when: fullscreen_guard_enabled | bool
+
+- name: Remove fullscreen watchdog (profile without guard)
+  ansible.builtin.file:
+    path: /usr/local/bin/kiosk-fullscreen-watch.sh
+    state: absent
+  when: not fullscreen_guard_enabled | bool
+
+# ---- Extensions (downloaded at pull time, force-installed via file://) -------
+# Every session starts with a fresh profile; downloading from AMO per session
+# start would be pointless traffic, so the XPI is kept under /opt/kiosk. It is
+# downloaded once; a new "version" (part of the file name) or "checksum" in
+# the site triggers a new download, stale files are removed below.
+- name: Download Firefox extensions
+  ansible.builtin.get_url:
+    url: "{{ item.0.url }}"
+    dest: "/opt/kiosk/{{ item.1 }}"
+    checksum: "{{ item.0.checksum | default(omit) }}"
+    mode: "0644"
+    force: false
+  loop: "{{ firefox_extensions | zip(firefox_extension_files) | list }}"
+  loop_control:
+    label: "{{ item.1 }}"
+  register: _xpi_download
+  until: _xpi_download is succeeded
+  retries: 3
+  delay: 5
+
+- name: Find extension files on the device
+  ansible.builtin.find:
+    paths: /opt/kiosk
+    patterns: "*.xpi"
+    file_type: file
+  register: xpi_present
+
+- name: Remove extensions no longer configured
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ xpi_present.files | map(attribute='path') | map('basename') | difference(firefox_extension_files) | map('regex_replace', '^', '/opt/kiosk/') | list }}"
+
+# ---- Local home page (site template) -----------------------------------------
+- name: Homepage directory
+  ansible.builtin.file:
+    path: /opt/kiosk/homepage
+    state: directory
+    mode: "0755"
+
+- name: Homepage index.html
+  ansible.builtin.template:
+    src: "{{ kiosk_site_dir }}/templates/{{ homepage_template }}"
+    dest: /opt/kiosk/homepage/index.html
+    mode: "0644"

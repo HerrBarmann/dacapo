@@ -1,0 +1,14 @@
+# /etc/systemd/system/ansible-pull.timer (deployed by ansible-pull)
+# Convergence interval: {{ pull_interval }} + boot trigger. RandomizedDelay
+# spreads the load on the Git server when many devices pull at once.
+[Unit]
+Description={{ kiosk_brand_name }} ansible-pull timer
+
+[Timer]
+OnBootSec={{ pull_boot_delay }}
+OnUnitActiveSec={{ pull_interval }}
+RandomizedDelaySec={{ pull_random_delay }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

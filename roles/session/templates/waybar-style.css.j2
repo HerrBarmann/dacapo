@@ -1,0 +1,64 @@
+/* /etc/xdg/waybar/style.css — {{ kiosk_brand_name }} bar
+   (Jinja2 template roles/session/templates/waybar-style.css.j2, deployed by ansible-pull)
+   Dark bar with an accent line, stands out from Firefox and any web page.
+   Colours and fonts come from the site (color_*, kiosk_font_*). Flat, no
+   rounded corners. */
+* {
+    /* FontAwesome provides the icons (clock, USB, power) */
+    font-family: {{ ([kiosk_font_family] + kiosk_font_stack) | map('to_json') | join(', ') }}, "FontAwesome", sans-serif;
+    font-size: 15px;
+    border: none;
+    border-radius: 0;
+}
+window#waybar {
+    background-color: {{ color_bar_bg }};
+    color: {{ color_bar_fg }};
+    border-bottom: 3px solid {{ color_accent }};
+}
+
+/* Left: logo, brand, hint */
+#image.logo {
+    padding: 0 10px 0 14px;
+}
+#custom-brand {
+    font-weight: bold;
+    font-size: 16px;
+    padding: 0 16px 0 0;
+    margin: 8px 0;
+    border-right: 1px solid {{ color_bar_divider }};
+}
+#custom-hint {
+    color: {{ color_bar_muted }};
+    padding: 0 16px;
+}
+
+/* Right: clock, host name, buttons */
+#clock {
+    font-weight: bold;
+    padding: 0 6px 0 12px;
+}
+#custom-host {
+    color: {{ color_bar_dim }};
+    font-size: 12px;
+    padding: 0 16px 0 6px;
+}
+#custom-usb {
+    background-color: {{ color_accent }};
+    color: {{ color_on_accent }};
+    padding: 0 16px;
+    margin: 4px 0 4px 6px;
+    font-weight: bold;
+}
+#custom-usb:hover {
+    background-color: {{ color_accent_hover }};
+}
+#custom-reset {
+    background-color: {{ color_danger }};
+    color: #ffffff;
+    padding: 0 16px;
+    margin: 4px 8px 4px 6px;
+    font-weight: bold;
+}
+#custom-reset:hover {
+    background-color: {{ color_danger_hover }};
+}

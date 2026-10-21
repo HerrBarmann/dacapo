@@ -1,0 +1,115 @@
+---
+# ============================================================================
+# tests/render.yml — renders every template of ONE profile of a site WITHOUT a
+# target system into tests/out/<site>/<profile>/ (development on macOS/Linux,
+# no root).
+#
+#   ansible-playbook tests/render.yml -e profile=browser
+#   ansible-playbook tests/render.yml -e profile=app -e site=examples/site-demo
+#   ansible-playbook tests/render.yml -e profile=display -e site=/path/to/site
+#
+# Loads the variables in the same layering as local.yml
+# (vars/defaults.yml < site.yml < secrets.yml < profiles/<profile>.yml) and
+# writes the finished files for proofreading or for comparisons.
+# ============================================================================
+- name: Render templates
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    profile: browser
+    site: "{{ playbook_dir }}/../examples/site-demo"
+    kiosk_site_dir: "{{ (site if site.startswith('/') else playbook_dir ~ '/../' ~ site) | realpath }}"
+    kiosk_profile: "{{ profile }}"
+    in_chroot: true
+    repo: "{{ playbook_dir }}/.."
+    out: "{{ playbook_dir }}/out/{{ kiosk_site_dir | basename }}/{{ profile }}"
+  tasks:
+    - name: Load core defaults and role defaults
+      ansible.builtin.include_vars:
+        file: "{{ item }}"
+      loop:
+        - "{{ repo }}/vars/defaults.yml"
+        - "{{ repo }}/roles/base/defaults/main.yml"
+        - "{{ repo }}/roles/session/defaults/main.yml"
+        - "{{ repo }}/roles/firefox/defaults/main.yml"
+        - "{{ repo }}/roles/usbmanager/defaults/main.yml"
+        - "{{ repo }}/roles/monitor/defaults/main.yml"
+
+    - name: Load site variables
+      ansible.builtin.include_vars:
+        file: "{{ kiosk_site_dir }}/site.yml"
+
+    - name: Check for site secrets
+      ansible.builtin.stat:
+        path: "{{ kiosk_site_dir }}/secrets.yml"
+      register: _secrets_stat
+
+    - name: Load site secrets
+      ansible.builtin.include_vars:
+        file: "{{ kiosk_site_dir }}/secrets.yml"
+      when: _secrets_stat.stat.exists
+
+    - name: Load profile variables
+      ansible.builtin.include_vars:
+        file: "{{ kiosk_site_dir }}/profiles/{{ profile }}.yml"
+
+    # include_vars outranks play vars: pin the profile name again (local.yml
+    # does the same with set_fact)
+    - name: Pin profile name
+      ansible.builtin.set_fact:
+        kiosk_profile: "{{ profile }}"
+
+    - name: Output directory
+      ansible.builtin.file:
+        path: "{{ out }}"
+        state: directory
+        mode: "0755"
+
+    - name: Render templates
+      ansible.builtin.template:
+        src: "{{ item.src }}"
+        dest: "{{ out }}/{{ item.dest }}"
+        mode: "0644"
+      loop:
+        - { src: "{{ repo }}/roles/session/templates/sway-config.j2", dest: etc-sway-config }
+        - { src: "{{ repo }}/roles/session/templates/waybar-config.json.j2", dest: etc-xdg-waybar-config.json }
+        - { src: "{{ repo }}/roles/session/templates/waybar-style.css.j2", dest: etc-xdg-waybar-style.css }
+        - { src: "{{ repo }}/roles/session/templates/mako-config.j2", dest: etc-xdg-mako-config }
+        - { src: "{{ repo }}/roles/session/templates/kiosk-idle-warn.sh.j2", dest: kiosk-idle-warn.sh }
+        - { src: "{{ repo }}/roles/session/templates/kiosk-screensaver.sh.j2", dest: kiosk-screensaver.sh }
+        - { src: "{{ repo }}/roles/firefox/templates/kiosk-firefox.sh.j2", dest: kiosk-firefox.sh }
+        - { src: "{{ repo }}/roles/firefox/templates/kiosk-reset.sh.j2", dest: kiosk-reset.sh }
+        - { src: "{{ kiosk_site_dir }}/templates/{{ homepage_template }}", dest: homepage-index.html }
+        - { src: "{{ repo }}/roles/base/templates/ansible-pull.service.j2", dest: ansible-pull.service }
+        - { src: "{{ repo }}/roles/base/templates/ansible-pull.timer.j2", dest: ansible-pull.timer }
+        - { src: "{{ repo }}/roles/base/templates/nightly-reboot.service.j2", dest: nightly-reboot.service }
+        - { src: "{{ repo }}/roles/base/templates/nightly-reboot.timer.j2", dest: nightly-reboot.timer }
+        - { src: "{{ repo }}/roles/base/templates/profile-kiosk-sway.sh.j2", dest: profile-kiosk-sway.sh }
+        - { src: "{{ repo }}/roles/monitor/templates/kiosk-monitor.service.j2", dest: kiosk-monitor.service }
+      loop_control:
+        label: "{{ item.dest }}"
+
+    - name: Assemble policies.json
+      ansible.builtin.copy:
+        content: "{{ {'policies': firefox_policies} | to_nice_json(indent=2) }}\n"
+        dest: "{{ out }}/policies.json"
+        mode: "0644"
+
+    - name: Assemble usbmanager.json
+      ansible.builtin.copy:
+        content: "{{ {'texts': usbmanager_texts_default | combine(usbmanager_texts), 'style': usbmanager_style_default | combine(usbmanager_style)} | to_nice_json(indent=2) }}\n"
+        dest: "{{ out }}/usbmanager.json"
+        mode: "0644"
+
+    - name: Waybar config must be valid JSON
+      ansible.builtin.assert:
+        that: (lookup('ansible.builtin.file', out ~ '/etc-xdg-waybar-config.json') | from_json) is mapping
+        quiet: true
+      when: waybar_enabled | bool
+
+    - name: Shell scripts must parse
+      ansible.builtin.command:
+        argv: [bash, -n, "{{ out }}/{{ item }}"]
+      loop: [kiosk-firefox.sh, kiosk-reset.sh, kiosk-idle-warn.sh, kiosk-screensaver.sh]
+      changed_when: false

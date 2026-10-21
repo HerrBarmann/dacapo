@@ -1,0 +1,10 @@
+# /etc/profile.d/zz-kiosk-sway.sh (deployed by ansible-pull)
+# Starts sway as soon as the kiosk user logs in on tty1 (autologin via getty
+# override). Nothing happens on other TTYs so the admin can still log in.
+if [ "$(id -un)" = "{{ kiosk_user }}" ] && [ "$(tty)" = "/dev/tty1" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    # Locale of the whole kiosk session (bar clock, dialogs, Firefox
+    # fallbacks) — independent of what PAM passes on.
+    export LANG={{ kiosk_locale }}
+    exec sway
+fi

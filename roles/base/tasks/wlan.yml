@@ -1,0 +1,70 @@
+---
+# Wi-Fi fallback: Ethernet stays the default (installation and preferred
+# operation); where no cable is connected the device joins the network from
+# <site>/files/wpa-kiosk-wlan.conf on its own.
+# Two backends, detected automatically:
+#   - Debian (preseed):   ifupdown + wpa_supplicant, interface renamed to wlan0
+#   - Raspberry Pi OS:    NetworkManager keyfile (Pi OS uses NM since Bookworm)
+- name: Detect network stack (NetworkManager?)
+  ansible.builtin.stat:
+    path: /etc/NetworkManager/system-connections
+  register: nm_dir
+
+- name: Wi-Fi via ifupdown + wpa_supplicant (Debian)
+  when: not nm_dir.stat.exists
+  block:
+    # Takes effect after a reboot (interface rename).
+    - name: Name the Wi-Fi interface wlan0 consistently
+      ansible.builtin.copy:
+        dest: /etc/systemd/network/70-kiosk-wlan.link
+        mode: "0644"
+        content: |
+          [Match]
+          Type=wlan
+
+          [Link]
+          Name=wlan0
+
+    - name: Directories for wpa_supplicant and ifupdown
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /etc/wpa_supplicant
+        - /etc/network/interfaces.d
+
+    - name: Wi-Fi credentials (root only)
+      ansible.builtin.copy:
+        src: "{{ kiosk_site_dir }}/files/wpa-kiosk-wlan.conf"
+        dest: /etc/wpa_supplicant/kiosk-wlan.conf
+        mode: "0600"
+
+    - name: Wlan0 via DHCP with wpa_supplicant
+      ansible.builtin.copy:
+        src: etc-network-wlan0
+        dest: /etc/network/interfaces.d/wlan0
+        mode: "0644"
+
+- name: Wi-Fi via NetworkManager (Raspberry Pi OS)
+  when: nm_dir.stat.exists
+  block:
+    # One place to maintain credentials: SSID/identity/password are read from
+    # the wpa_supplicant file at runtime.
+    - name: Derive Wi-Fi credentials from the wpa configuration
+      ansible.builtin.set_fact:
+        wlan_ssid: "{{ _wpa | regex_search('ssid=\"([^\"]*)\"', '\\1') | first }}"
+        wlan_identity: "{{ _wpa | regex_search('identity=\"([^\"]*)\"', '\\1') | default([''], true) | first }}"
+        wlan_password: "{{ _wpa | regex_search('password=\"([^\"]*)\"', '\\1') | default([''], true) | first }}"
+        wlan_psk: "{{ _wpa | regex_search('psk=\"([^\"]*)\"', '\\1') | default([''], true) | first }}"
+      vars:
+        _wpa: "{{ lookup('ansible.builtin.file', kiosk_site_dir ~ '/files/wpa-kiosk-wlan.conf') }}"
+      no_log: true
+
+    - name: NetworkManager connection kiosk-wlan (root only)
+      ansible.builtin.template:
+        src: kiosk-wlan.nmconnection.j2
+        dest: /etc/NetworkManager/system-connections/kiosk-wlan.nmconnection
+        mode: "0600"
+      no_log: true
+      notify: Reload networkmanager connections

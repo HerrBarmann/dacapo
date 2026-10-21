@@ -1,0 +1,93 @@
+---
+# Role firefox — Firefox ESR as kiosk browser: enterprise policies, start
+# wrapper with profile template, reset script, local home page.
+# Shared switches (firefox_mode, kiosk_homepage, extensions, site/profile
+# policies) are documented in vars/defaults.yml.
+firefox_hide_chrome: "{{ firefox_mode == 'app' }}"
+firefox_launch_args: "{{ '--kiosk' if firefox_mode == 'display' else '--private-window' }}"
+
+# Language pack: Debian ships firefox-esr-l10n-<lang>; en-US is built in.
+firefox_packages: "{{ ['firefox-esr'] + (['firefox-esr-l10n-' ~ kiosk_language] if kiosk_language not in ['en', 'en-US'] else []) }}"
+firefox_langpack_id: "langpack-{{ kiosk_language }}@firefox-esr.mozilla.org"
+
+# Extensions (vars/defaults.yml: firefox_extensions): file name on the device
+# and the generated ExtensionSettings entries.
+firefox_extension_files: >-
+  {{ firefox_extensions | map(attribute='name')
+     | zip(firefox_extensions | map(attribute='version', default=''))
+     | map('join', '-') | map('regex_replace', '-$', '') | map('regex_replace', '$', '.xpi') | list }}
+firefox_expected_xpi: "{{ firefox_extensions | length }}"
+firefox_firstrun_ids: "{{ firefox_extensions | selectattr('verify_firstrun', 'defined') | selectattr('verify_firstrun') | map(attribute='id') | list }}"
+firefox_policies_extensions:
+  ExtensionSettings: >-
+    {%- set settings = {} -%}
+    {%- for ext in firefox_extensions -%}
+    {%-   set _ = settings.update({ext.id: {
+            'installation_mode': 'force_installed',
+            'install_url': 'file:///opt/kiosk/' ~ firefox_extension_files[loop.index0],
+            'private_browsing': ext.private_browsing | default(true),
+            'updates_disabled': true}}) -%}
+    {%- endfor -%}
+    {{- settings -}}
+
+# ---- Common policies (all profiles) --------------------------------------------
+# Lockdown and privacy; permanent private browsing is the core of zero
+# persistence on the application level (no history/cookies/cache on disk).
+# No about:config back doors, no add-ons installed by users.
+# Policy reference: https://mozilla.github.io/policy-templates/
+firefox_policies_common:
+  DisableTelemetry: true
+  DisableFirefoxStudies: true
+  DisablePocket: true
+  DisableFirefoxAccounts: true
+  DisableFormHistory: true
+  DisableAppUpdate: true
+  DisableDeveloperTools: true
+  DisableProfileImport: true
+  DisableSetDesktopBackground: true
+  DisablePrivateBrowsing: false
+  DontCheckDefaultBrowser: true
+  OfferToSaveLogins: false
+  PasswordManagerEnabled: false
+  AutofillAddressEnabled: false
+  AutofillCreditCardEnabled: false
+  NoDefaultBookmarks: true
+  RequestedLocales: ["{{ kiosk_language }}"]
+  OverrideFirstRunPage: ""
+  OverridePostUpdatePage: ""
+  BlockAboutConfig: true
+  BlockAboutProfiles: true
+  BlockAboutAddons: true
+  # Web pages may not request desktop notifications — the notification daemon
+  # (mako) is reserved for the idle warning.
+  Permissions:
+    Notifications:
+      BlockNewRequests: true
+  # The wildcard blocks add-on installs by users — but also hits the language
+  # pack (it became appDisabled). Hence the explicit exception.
+  ExtensionSettings: "{{ {'*': {'installation_mode': 'blocked'}} | combine({firefox_langpack_id: {'installation_mode': 'allowed'}}) }}"
+  Preferences:
+    intl.locale.requested: { Value: "{{ kiosk_language }}", Status: locked }
+    browser.translations.automaticallyPopup: { Value: false, Status: default }
+    browser.privatebrowsing.autostart: { Value: true, Status: locked }
+    browser.startup.homepage: { Value: "{{ kiosk_homepage }}", Status: locked }
+    browser.startup.page: { Value: 1, Status: locked }
+    browser.newtabpage.enabled: { Value: false, Status: locked }
+    datareporting.healthreport.uploadEnabled: { Value: false, Status: locked }
+  Homepage:
+    URL: "{{ kiosk_homepage }}"
+    Locked: true
+    StartPage: homepage
+
+# Mode "app" only: userChrome.css is loaded only if this preference is set at
+# start (also in user.js, see kiosk-firefox.sh).
+firefox_policies_hide_chrome:
+  Preferences:
+    toolkit.legacyUserProfileCustomizations.stylesheets: { Value: true, Status: locked }
+
+firefox_policies: >-
+  {{ firefox_policies_common
+     | combine(firefox_policies_hide_chrome if firefox_hide_chrome | bool else {}, recursive=True)
+     | combine(firefox_policies_extensions if firefox_extensions | length > 0 else {}, recursive=True)
+     | combine(firefox_policies_site, recursive=True)
+     | combine(firefox_policies_profile, recursive=True) }}

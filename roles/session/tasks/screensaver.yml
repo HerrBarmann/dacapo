@@ -1,0 +1,64 @@
+---
+# Screensaver: sway sets a random image from <site>/wallpaper/<WxH>/ as the
+# background and switches to an empty workspace (no image viewer program —
+# those have command modes one could break out of).
+- name: Images in the site
+  ansible.builtin.find:
+    paths: "{{ kiosk_site_dir }}/wallpaper"
+    recurse: true
+    file_type: file
+    patterns: ["*.png", "*.jpg", "*.jpeg"]
+  register: wallpaper_site
+  delegate_to: localhost
+  become: false
+  when: screensaver_enabled | bool
+
+- name: Site must provide wallpapers when the screensaver is enabled
+  ansible.builtin.assert:
+    that: wallpaper_site.matched | int > 0
+    fail_msg: "screensaver_enabled is true but {{ kiosk_site_dir }}/wallpaper/<WIDTHxHEIGHT>/ has no images"
+    quiet: true
+  when: screensaver_enabled | bool
+
+- name: Screensaver script
+  ansible.builtin.template:
+    src: kiosk-screensaver.sh.j2
+    dest: /usr/local/bin/kiosk-screensaver.sh
+    mode: "0755"
+  when: screensaver_enabled | bool
+
+- name: Screensaver images
+  ansible.builtin.copy:
+    src: "{{ kiosk_site_dir }}/wallpaper/"
+    dest: /opt/kiosk/wallpaper/
+    mode: "0644"
+  when: screensaver_enabled | bool
+
+# copy adds new images but never deletes ones removed from the site — the
+# screensaver would keep showing them. So remove everything on the device
+# that is not (any more) in the site.
+- name: Images on the device
+  ansible.builtin.find:
+    paths: /opt/kiosk/wallpaper
+    recurse: true
+    file_type: file
+  register: wallpaper_device
+  when: screensaver_enabled | bool
+
+- name: Remove images no longer in the site
+  ansible.builtin.file:
+    path: "/opt/kiosk/wallpaper/{{ item }}"
+    state: absent
+  loop: "{{ (wallpaper_device.files | map(attribute='path') | map('relpath', '/opt/kiosk/wallpaper') | list)
+            | difference(wallpaper_site.files | map(attribute='path') | map('relpath', kiosk_site_dir ~ '/wallpaper') | list) }}"
+  when: screensaver_enabled | bool
+
+# Profile without screensaver: remove leftovers (e.g. after a profile change).
+- name: Remove screensaver files (profile without screensaver)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/local/bin/kiosk-screensaver.sh
+    - /opt/kiosk/wallpaper
+  when: not screensaver_enabled | bool

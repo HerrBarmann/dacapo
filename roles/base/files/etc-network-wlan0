@@ -1,0 +1,6 @@
+# /etc/network/interfaces.d/wlan0 — kiosk Wi-Fi fallback (deployed by ansible-pull)
+# Used automatically where no Ethernet cable is connected. The Wi-Fi card is
+# named wlan0 on every device (see the .link rule written by the base role).
+allow-hotplug wlan0
+iface wlan0 inet dhcp
+    wpa-conf /etc/wpa_supplicant/kiosk-wlan.conf

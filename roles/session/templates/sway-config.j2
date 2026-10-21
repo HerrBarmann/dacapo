@@ -1,0 +1,110 @@
+# /etc/sway/config — {{ kiosk_profile_title }}, profile "{{ kiosk_profile }}"
+# (Jinja2 template roles/session/templates/sway-config.j2, deployed by ansible-pull)
+# Minimal Wayland compositor as a kiosk: Firefox as the only window
+# {{ 'below the waybar.' if waybar_enabled | bool else 'in fullscreen (no bar).' }}
+#
+# This file REPLACES the package default config completely — therefore no
+# default keybindings exist either (no terminal, no exit, no kill). Never add
+# "include" lines for package configs here.
+
+### Input
+input type:keyboard {
+    xkb_layout {{ keyboard_layout }}
+}
+{% if hide_cursor | bool %}
+# Hide the pointer (display without interaction)
+seat * hide_cursor 1000
+{% endif %}
+
+### Output: switch on at start{{ ' (switched off on idle: swayidle below)' if screen_off_enabled | bool else '' }}
+output * power on
+output * bg {{ color_desktop_bg | lower }} solid_color
+{% if output_transform | string != 'normal' %}
+# Screen rotation (output_transform, e.g. 90 for portrait)
+output * transform {{ output_transform }}
+{% endif %}
+
+### Firefox as the only application
+{% if waybar_enabled | bool %}
+# NO "fullscreen enable": a fullscreen window would cover the waybar (and the
+# "end session" button). As the only tiled window Firefox fills the whole area
+# below the bar automatically.
+{% endif %}
+{% if firefox_mode == 'browser' %}
+# NO --kiosk: address and bookmark bar are visible on purpose (managed
+# bookmarks + free browsing); the lockdown is done by policies.json.
+{% elif firefox_mode == 'app' %}
+# NO --kiosk: its chrome hiding depends on fullscreen, which would cover the
+# waybar. Address bar/tabs/bookmarks are hidden by userChrome.css instead
+# (written into the profile by kiosk-firefox.sh).
+{% else %}
+# Firefox runs with --kiosk (real fullscreen, no bar needed) and is restarted
+# automatically after a crash or exit.
+{% endif %}
+default_border none
+default_floating_border none
+for_window [app_id=".*"] border none
+{% if fullscreen_guard_enabled | bool %}
+# Against fullscreen via F11 or the JavaScript fullscreen API:
+#  1. for_window rule: removes fullscreen when the window is mapped.
+#  2. kiosk-fullscreen-watch.sh: removes it immediately at runtime via IPC.
+#  3. waybar sits on the overlay layer (waybar config) and would stay visible
+#     even above a fullscreen window.
+for_window [app_id=".*"] fullscreen disable
+exec /usr/local/bin/kiosk-fullscreen-watch.sh
+{% endif %}
+{% if firefox_mode == 'display' %}
+exec sh -c 'while true; do /usr/local/bin/kiosk-firefox.sh; sleep 3; done'
+{% else %}
+exec /usr/local/bin/kiosk-firefox.sh
+{% endif %}
+{% if waybar_enabled | bool %}
+
+### Bar (hint, clock, "end session" button)
+exec waybar
+{% endif %}
+{% if usb_enabled | bool %}
+
+### Mount USB drives automatically (to /media/{{ kiosk_user }}/<label>) —
+### for downloads onto personal media.
+exec udiskie --no-notify
+
+### Local web service "USB drive" (http://127.0.0.1:8080/)
+exec python3 /opt/kiosk/usbmanager.py
+{% endif %}
+{% if idle_reset_enabled | bool %}
+
+### Notification daemon for the idle warning (popup, /etc/xdg/mako/config)
+exec mako -c /etc/xdg/mako/config
+{% endif %}
+{% if idle_reset_enabled | bool or screensaver_enabled | bool or screen_off_enabled | bool %}
+
+### Idle watchdog: {{ ['warning (popup), reset' if idle_reset_enabled | bool else '', 'screensaver' if screensaver_enabled | bool else '', 'screen off' if screen_off_enabled | bool else ''] | reject('equalto', '') | join(', ') }}
+# Warning: centred popup with countdown (mako, overlay layer — does not move
+# the screen content). Important: start in the background (&) — swayidle -w
+# would otherwise wait for the script and the reset timeout would never fire.
+# On input (resume) the script is killed and the popup closed immediately.
+# Screensaver and screen off end with the first mouse or keyboard input.
+{% set idle_lines = [] %}
+{% if idle_reset_enabled | bool %}
+{%   set _ = idle_lines.append("timeout " ~ (idle_seconds - idle_warn_seconds) ~ " '/usr/local/bin/kiosk-idle-warn.sh &'") %}
+{%   set _ = idle_lines.append("resume 'pkill -u " ~ kiosk_user ~ " -f kiosk-idle-warn.sh; makoctl dismiss -a'") %}
+{%   set _ = idle_lines.append("timeout " ~ idle_seconds ~ " '/usr/local/bin/kiosk-reset.sh'") %}
+{% endif %}
+{% if screensaver_enabled | bool %}
+{%   set _ = idle_lines.append("timeout " ~ screensaver_seconds ~ " '/usr/local/bin/kiosk-screensaver.sh start'") %}
+{%   set _ = idle_lines.append("resume '/usr/local/bin/kiosk-screensaver.sh stop'") %}
+{% endif %}
+{% if screen_off_enabled | bool %}
+{%   set _ = idle_lines.append("timeout " ~ screen_off_seconds ~ " 'swaymsg \"output * power off\"'") %}
+{%   set _ = idle_lines.append("resume 'swaymsg \"output * power on\"'") %}
+{% endif %}
+exec swayidle -w \
+    {{ idle_lines | join(' \\\n    ') }}
+{% endif %}
+
+### Looks
+gaps inner 0
+
+# Hardening note: Ctrl+Alt+F<n> VT switching is prevented with a kernel
+# parameter (docs/operations.md), not here.

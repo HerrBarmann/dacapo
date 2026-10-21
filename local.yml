@@ -1,0 +1,150 @@
+---
+# ============================================================================
+# dacapo — ansible-pull playbook.  SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Dennis Bormann (HerrBarmann) and Hochschule für Musik und
+# Theater Hamburg, ITSC (see NOTICE)
+# ONE entry point for every kiosk profile of a site.
+#
+# Runs locally on each device: once during installation (Debian preseed
+# late_command or Raspberry Pi bootstrap — i.e. in a CHROOT WITHOUT running
+# systemd) and periodically afterwards from a systemd timer.
+#
+# Site directory (branding, profiles, templates, assets, secrets), in order:
+#   1. -e kiosk_site_dir=/path            (explicit)
+#   2. $KIOSK_SITE_DIR                    (environment)
+#   3. ../site next to this checkout      (site repository with core submodule)
+#   4. examples/site-demo                 (fallback: the shipped demo site)
+#
+# Profile of a device, in order:
+#   1. -e profile=<name>                  (explicit, used by the installer)
+#   2. <kiosk_profile_file>               (marker written by installer / this run)
+#   3. hostname prefix (hostname_prefix of a profile)
+#   4. kiosk_default_profile (site.yml)
+#
+# Chroot safety: services/timers are only ENABLED (the boot starts them); on
+# running systems they are started as well. Never add an unconditional
+# "state: started". Idempotent: converges to the same state on every run.
+# ============================================================================
+- name: Configure kiosk
+  hosts: localhost
+  connection: local
+  become: true
+
+  vars:
+    in_chroot: "{{ ansible_facts['is_chroot'] | default(false) }}"
+    _site_candidates:
+      - "{{ kiosk_site_dir | default('') }}"
+      - "{{ lookup('ansible.builtin.env', 'KIOSK_SITE_DIR') }}"
+      - "{{ playbook_dir }}/../site"
+      - "{{ playbook_dir }}/examples/site-demo"
+
+  pre_tasks:
+    # ---- Site directory ----------------------------------------------------
+    - name: Check site directory candidates
+      ansible.builtin.stat:
+        path: "{{ (item if item.startswith('/') else playbook_dir ~ '/' ~ item) }}/site.yml"
+      loop: "{{ _site_candidates | reject('equalto', '') | list }}"
+      register: _site_stat
+
+    - name: Choose site directory
+      ansible.builtin.set_fact:
+        kiosk_site_dir: "{{ (_site_stat.results | selectattr('stat.exists') | map(attribute='stat.path') | first | dirname) | realpath }}"
+      failed_when: (_site_stat.results | selectattr('stat.exists') | list) | length == 0
+
+    - name: Load core defaults
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/vars/defaults.yml"
+
+    - name: Load site variables
+      ansible.builtin.include_vars:
+        file: "{{ kiosk_site_dir }}/site.yml"
+
+    - name: Check for site secrets
+      ansible.builtin.stat:
+        path: "{{ kiosk_site_dir }}/secrets.yml"
+      register: _secrets_stat
+
+    - name: Load site secrets
+      ansible.builtin.include_vars:
+        file: "{{ kiosk_site_dir }}/secrets.yml"
+      when: _secrets_stat.stat.exists
+      no_log: true
+
+    # ---- Profile -----------------------------------------------------------
+    - name: Read profile definitions of the site
+      ansible.builtin.set_fact:
+        kiosk_profiles: >-
+          {{ kiosk_profiles | default({}) | combine({
+               (item | basename | regex_replace('\.yml$', '')):
+               (lookup('ansible.builtin.file', item) | from_yaml) }) }}
+      loop: "{{ lookup('ansible.builtin.fileglob', kiosk_site_dir ~ '/profiles/*.yml', wantlist=True) | sort }}"
+      loop_control:
+        label: "{{ item | basename }}"
+
+    - name: Site must define at least one profile
+      ansible.builtin.assert:
+        that: kiosk_profiles | length > 0
+        fail_msg: "No profiles in {{ kiosk_site_dir }}/profiles/*.yml"
+        quiet: true
+
+    - name: Check profile marker
+      ansible.builtin.stat:
+        path: "{{ kiosk_profile_file }}"
+      register: _marker_stat
+
+    - name: Read profile marker
+      ansible.builtin.slurp:
+        src: "{{ kiosk_profile_file }}"
+      register: _marker
+      when: _marker_stat.stat.exists
+
+    - name: Determine profile (-e profile, marker file, hostname prefix, site default)
+      ansible.builtin.set_fact:
+        kiosk_profile: "{{ profile | default(_marker_profile | default(_hostname_profile, true), true) }}"
+      vars:
+        _marker_profile: "{{ (_marker.content | b64decode | trim) if _marker_stat.stat.exists else '' }}"
+        _prefix_map: >-
+          {{ dict(kiosk_profiles | dict2items
+                  | map(attribute='value.hostname_prefix', default='')
+                  | zip(kiosk_profiles.keys())) }}
+        _hostname_prefix: "{{ ansible_facts['hostname'] | regex_replace('-[^-]*$', '') }}"
+        _hostname_profile: >-
+          {{ _prefix_map[_hostname_prefix] if (_hostname_prefix in _prefix_map and _hostname_prefix != '')
+             else (_hostname_prefix if _hostname_prefix in kiosk_profiles else kiosk_default_profile) }}
+
+    - name: Profile must exist in the site
+      ansible.builtin.assert:
+        that: kiosk_profile in kiosk_profiles
+        fail_msg: "Unknown profile '{{ kiosk_profile }}' — available: {{ kiosk_profiles.keys() | join(', ') }}"
+        quiet: true
+
+    - name: Report site and profile
+      ansible.builtin.debug:
+        msg: "Site {{ kiosk_site_dir }}, profile {{ kiosk_profile }} (host {{ ansible_facts['hostname'] }}, chroot={{ in_chroot }})"
+
+    - name: Load profile variables
+      ansible.builtin.include_vars:
+        file: "{{ kiosk_site_dir }}/profiles/{{ kiosk_profile }}.yml"
+
+    - name: Check per-device overrides
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: "{{ kiosk_host_vars_files }}"
+      register: _host_vars_stat
+
+    - name: Load per-device overrides
+      ansible.builtin.include_vars:
+        file: "{{ item.stat.path }}"
+      loop: "{{ _host_vars_stat.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.stat.exists
+
+  roles:
+    - role: base
+    - role: session
+    - role: firefox
+    - role: usbmanager
+      when: usb_enabled | bool
+    - role: monitor
+      when: monitor_enabled | bool

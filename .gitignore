@@ -1,0 +1,9 @@
+.DS_Store
+__pycache__/
+.ansible/
+tests/out/
+# Local comparison fixture against a legacy deployment (never commit site data)
+# Build artefacts
+preseed/*.iso
+preseed/cache/
+raspberry/firstrun.sh

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="{{ kiosk_language }}">
+<!-- Jinja2 template <site>/templates/homepage-app.html.j2 (profile "app").
+     Launch page of the application terminal: one big button, four steps as
+     tiles, notes in the footer. Firefox does NOT start on the application:
+     its login page would expire and stay on screen; the idle reset always
+     returns here and the login starts fresh at the press of the button.
+     Seconds come from idle_seconds, the target from app_url.
+     Must fit without scrolling below the bar (no browser chrome in this
+     profile): about 1920x1040 (1080p) down to 1366x728 (768p). -->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ kiosk_brand_name }} — Room booking</title>
+<style>
+  :root {
+    --accent: {{ color_accent }}; --ink: #111; --muted: #5c5c5c; --paper: #f4f4f2;
+    --step-a: {{ color_accent }}; --step-b: #4C6EF5; --step-c: #7048E8; --step-d: #E8590C;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: {{ kiosk_css_font_family }};
+    color: var(--ink); background: #fff;
+    display: flex; flex-direction: column; min-height: 100%;
+  }
+  .wrap { width: min(1500px, 100% - 2 * clamp(28px, 5vw, 96px)); margin: 0 auto; }
+
+  header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-top: clamp(22px, 4vh, 48px); }
+  header .logo { width: clamp(60px, 9vh, 110px); }
+  .notice { display: flex; gap: 12px; align-items: center; max-width: 36rem; margin: 0; font-size: clamp(15px, 2.1vh, 20px); line-height: 1.35; color: #222; border-left: 4px solid var(--accent); padding: 6px 0 6px 14px; }
+  .notice svg { flex: none; }
+  main.wrap { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; padding: clamp(18px, 6vh, 72px) 0 clamp(12px, 3vh, 40px); }
+
+  h1 { font-size: clamp(40px, 8.4vh, 96px); font-weight: 700; line-height: 1; margin: 0; }
+  h1 span { color: var(--accent); }
+
+  .ctarow { display: flex; gap: 12px; margin: clamp(18px, 4.2vh, 48px) 0 0; max-width: 1240px; }
+  .login { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 18px; background: var(--ink); color: #fff; text-decoration: none; padding: clamp(12px, 2vh, 20px) clamp(18px, 2vw, 34px); border: 2px solid var(--ink); }
+  .login strong { display: block; font-size: clamp(20px, 3vh, 30px); font-weight: 700; line-height: 1.1; }
+  .login small { display: block; margin-top: 4px; font-size: clamp(13px, 1.8vh, 17px); color: #cfcfcf; }
+  .login .arrow { flex: none; font-size: clamp(26px, 4vh, 40px); line-height: 1; }
+  .login:hover { background: #2a2a2a; }
+  .login:focus-visible { outline: 4px solid var(--accent); outline-offset: 2px; }
+  .helplink { display: flex; align-items: center; gap: 8px; padding: 0 clamp(16px, 1.6vw, 28px); border: 2px solid var(--ink); color: var(--ink); font-weight: 700; text-decoration: none; white-space: nowrap; font-size: clamp(15px, 2.1vh, 21px); }
+  .helplink:hover { background: var(--paper); }
+  .cta-hint { margin: 8px 0 0; color: var(--muted); font-size: clamp(13px, 1.6vh, 15px); }
+
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(12px, 1.5vw, 24px); margin: clamp(22px, 5vh, 60px) 0 0; list-style: none; padding: 0; }
+  .steps li { display: flex; flex-direction: column; gap: clamp(10px, 2vh, 22px); min-height: clamp(120px, 24vh, 260px); padding: clamp(16px, 2.5vh, 28px); background: var(--paper); border-top: 8px solid var(--c); }
+  .steps .num { display: flex; align-items: center; gap: 12px; color: var(--c); }
+  .steps .num b { font-size: clamp(28px, 4.6vh, 48px); font-weight: 700; line-height: 1; }
+  .steps svg { width: clamp(30px, 4.4vh, 44px); height: clamp(30px, 4.4vh, 44px); }
+  .steps strong { display: block; font-size: clamp(20px, 3.2vh, 34px); font-weight: 700; line-height: 1.1; }
+  .steps p { margin: 6px 0 0; font-size: clamp(14px, 1.8vh, 17px); line-height: 1.35; color: #222; }
+
+  footer { margin-top: auto; border-top: 1px solid #e0e0dc; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 32px; align-items: center; padding: clamp(12px, 2.2vh, 22px) 0; }
+  footer span.item { display: inline-flex; gap: 9px; align-items: center; font-weight: 700; font-size: clamp(15px, 1.9vh, 18px); }
+  footer span.item svg { color: var(--accent); flex: none; }
+  footer .url { margin-left: auto; color: var(--muted); font-size: clamp(13px, 1.6vh, 15px); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img class="logo" src="assets/{{ kiosk_logo }}" alt="{{ kiosk_brand_name }}">
+    <p class="notice">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{ color_accent }}" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      <span>Booking terminal: after {{ idle_seconds }} seconds without input the session ends and you are signed out.</span>
+    </p>
+  </header>
+</div>
+
+<main class="wrap">
+  <h1>Book a <span>room</span></h1>
+
+  <div class="ctarow">
+    <a class="login" href="{{ app_url }}">
+      <span><strong>Sign in to the booking system</strong><small>Use your institutional account</small></span>
+      <span class="arrow" aria-hidden="true">→</span>
+    </a>
+    <a class="helplink" href="{{ app_help_url }}">Guide &amp; help <span aria-hidden="true">→</span></a>
+  </div>
+  <p class="cta-hint">After booking please sign out or press “{{ text_bar_reset }}” at the top right.</p>
+
+  <ol class="steps">
+    <li style="--c: var(--step-a)">
+      <span class="num"><b>1</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+      <span><strong>Sign in</strong><p>With your username and password.</p></span>
+    </li>
+    <li style="--c: var(--step-b)">
+      <span class="num"><b>2</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="16"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>
+      <span><strong>Book</strong><p>Choose a room, pick date and time, save.</p></span>
+    </li>
+    <li style="--c: var(--step-c)">
+      <span class="num"><b>3</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12l5 5L20 6"/></svg></span>
+      <span><strong>Confirm</strong><p>Confirm the booking at a terminal shortly before it starts.</p></span>
+    </li>
+    <li style="--c: var(--step-d)">
+      <span class="num"><b>4</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h11"/></svg></span>
+      <span><strong>Sign out</strong><p>Don’t forget — or press “{{ text_bar_reset }}” at the top right.</p></span>
+    </li>
+  </ol>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="item"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg>Please cancel bookings you will not use</span>
+    <span class="item"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14"/><path d="M3 7l9 6 9-6"/></svg>Questions: booking@example.org</span>
+    <span class="url">{{ kiosk_brand_name }} · profile {{ kiosk_profile }}</span>
+  </div>
+</footer>
+</body>
+</html>

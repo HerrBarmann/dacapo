@@ -1,0 +1,166 @@
+---
+# ============================================================================
+# dacapo — reference of ALL variables and their defaults.
+#
+# Layering (later wins):
+#   this file  <  <site>/site.yml  <  <site>/secrets.yml  <  <site>/profiles/<profile>.yml
+#              <  per-device overrides (kiosk_host_vars_files)  <  -e on the command line
+#
+# Everything a site needs to change lives in the site directory; the core
+# never has to be edited for branding, texts, URLs or policies.
+# ============================================================================
+
+# ---- Core runtime -----------------------------------------------------------
+# true = running inside the installer chroot (no systemd). Services are only
+# enabled there; local.yml detects it, tests pass -e in_chroot=true.
+in_chroot: false
+# Set by local.yml: name of the active profile and its definition file.
+kiosk_profile: browser
+kiosk_profile_title: "{{ kiosk_brand_name }} ({{ kiosk_profile }})"
+# Where the device keeps its profile marker and local overrides.
+kiosk_state_dir: /etc/kiosk
+kiosk_profile_file: "{{ kiosk_state_dir }}/profile"
+# Optional per-device overrides (YAML). The second path is the Raspberry Pi
+# boot partition, editable on any computer.
+kiosk_host_vars_files:
+  - "{{ kiosk_state_dir }}/host.yml"
+  - /boot/firmware/kiosk.yml
+# Profile used when neither -e profile, the marker file nor the hostname
+# prefix decide. Sites with an existing fleet set this to their legacy profile.
+kiosk_default_profile: browser
+# Hostnames: <hostname_prefix>-<last 6 hex digits of the MAC>. Profiles may
+# override; the installer and the hostname-based detection use it.
+hostname_prefix: "{{ kiosk_profile }}"
+
+# ---- Branding ---------------------------------------------------------------
+kiosk_brand_name: "Kiosk"             # systemd descriptions, page titles, bar
+kiosk_language: en                    # Firefox UI language (langpack), e.g. de
+kiosk_locale: en_US.UTF-8             # LANG of the kiosk session (clock, dialogs)
+keyboard_layout: us                   # xkb layout of the kiosk session
+# Primary UI font (bar, popup) and CSS fallbacks. Install licensed fonts from
+# <site>/fonts/ (kiosk_fonts_dir_name below); free default: URW Gothic.
+kiosk_font_family: "URW Gothic"
+kiosk_font_stack: ["DejaVu Sans"]
+# Ready-made CSS font-family list for site templates.
+kiosk_css_font_family: '{{ ([kiosk_font_family] + kiosk_font_stack) | map("to_json") | join(", ") }}, sans-serif'
+# File names inside <site>/assets/ (deployed to /opt/kiosk/homepage/assets/).
+kiosk_logo: logo.png                  # on light backgrounds (home pages)
+kiosk_logo_light: logo-light.png      # on the dark bar and the idle popup
+kiosk_fonts_dir_name: kiosk-site      # -> /usr/local/share/fonts/<name>/
+kiosk_ca_name: kiosk-site             # -> /usr/local/share/ca-certificates/<name>.crt
+
+# ---- Colours ----------------------------------------------------------------
+color_accent: "#0E7C86"               # brand accent (bar underline, popup border)
+color_accent_hover: "#139AA6"
+color_danger: "#B3261E"               # "end session" button, last popup seconds
+color_danger_hover: "#D33A31"
+color_bar_bg: "#1A1A1A"
+color_bar_fg: "#F2F2F2"
+color_bar_muted: "#B5B5B5"            # hint text
+color_bar_dim: "#8A8A8A"              # host name
+color_bar_divider: "#3A3A3A"
+color_on_accent: "#111111"            # text on accent-coloured buttons
+color_popup_bg: "#141414F0"           # idle popup background (with alpha)
+color_popup_fg: "#F3EFE7"
+color_desktop_bg: "#FFFFFF"           # compositor background behind Firefox
+color_screensaver_bg: "#111111"       # letterbox colour behind screensaver images
+
+# ---- UI texts ---------------------------------------------------------------
+# The bar (waybar)
+text_bar_brand: "{{ kiosk_brand_name }}"
+text_bar_hint: ""                     # free text next to the brand, may use variables
+text_bar_clock: "{:%a %Y-%m-%d  %H:%M}"   # std::format style, see waybar clock module
+text_bar_host: "Host: {}"             # {} = hostname
+text_bar_usb: "USB drive"
+text_bar_reset: "End session"
+# The idle warning popup. {seconds} and {unit} are replaced at runtime.
+text_idle_title: "Still there?"
+text_idle_body: "This session ends automatically in <b>{seconds} {unit}</b> and all data will be deleted."
+text_idle_hint: "Move the mouse or press any key to continue."
+text_idle_second: "second"
+text_idle_seconds: "seconds"
+popup_font_size: 24
+popup_width: 980
+popup_height: 320
+
+# ---- Users and persistence ----------------------------------------------------
+kiosk_user: kiosk                     # unprivileged session user (created here)
+kiosk_home: /home/kiosk               # lives on tmpfs (zero persistence)
+kiosk_home_tmpfs_size: 2g             # upper bound, not a reservation
+admin_user: kioskadmin                # remote maintenance via SSH key
+
+# ---- Convergence and maintenance windows -------------------------------------
+# ansible-pull URL of the SITE repository (contains dacapo as submodule),
+# including a read-only deploy token. Keep it in <site>/secrets.yml.
+kiosk_pull_url: "https://CHANGE_ME:CHANGE_ME@git.example.org/org/kiosk-site.git"
+kiosk_pull_branch: main
+kiosk_pull_playbook: core/local.yml   # path of this playbook inside the site repo
+pull_boot_delay: 3min
+pull_interval: 30min
+pull_random_delay: 5min
+nightly_reboot_time: "04:00"
+apt_update_lists_time: "02:30"
+apt_upgrade_time: "03:00"
+
+# ---- Network ----------------------------------------------------------------
+# Wi-Fi fallback where no Ethernet is available: a wpa_supplicant network
+# block in <site>/files/wpa-kiosk-wlan.conf (WPA2 Enterprise or PSK).
+# Debian: ifupdown + wpa_supplicant; Raspberry Pi OS: NetworkManager (derived
+# from the same file). Detected automatically.
+wlan_fallback_enabled: false
+# Optional internal CA (<site>/files/ca.crt) trusted system-wide, e.g. for a
+# self-hosted Git server. The installer embeds it as well.
+ca_enabled: "{{ lookup('ansible.builtin.fileglob', kiosk_site_dir ~ '/files/ca.crt') | length > 0 }}"
+
+# ---- Session (sway) ---------------------------------------------------------
+idle_reset_enabled: true              # reset the session after idle_seconds
+idle_seconds: 600
+idle_warn_seconds: 60                 # countdown popup this long before the reset
+screensaver_enabled: false            # random image from <site>/wallpaper/<WxH>/
+screensaver_seconds: 900
+screen_off_enabled: false
+screen_off_seconds: 2700
+hide_cursor: false                    # hide the pointer after 1 s (displays)
+output_transform: normal              # normal | 90 | 180 | 270
+waybar_enabled: true
+waybar_layer: top                     # top: fullscreen video may cover the bar; overlay: never
+waybar_usb_button: false
+fullscreen_guard_enabled: false       # take fullscreen away from Firefox (F11, JS)
+usb_enabled: false                    # udiskie automount + local USB manager page
+
+# ---- Firefox ----------------------------------------------------------------
+# browser = address and bookmark bar visible
+# app     = browser chrome hidden with userChrome.css (web app terminal)
+# display = --kiosk fullscreen, restarted on exit (digital signage)
+firefox_mode: browser
+kiosk_homepage: "file:///opt/kiosk/homepage/index.html"
+homepage_template: homepage-browser.html.j2   # in <site>/templates/
+# Extensions are downloaded at pull time (never committed) and force-installed:
+#   - name: ublock-origin                       -> /opt/kiosk/ublock-origin.xpi
+#     id: "uBlock0@raymondhill.net"
+#     url: "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi"
+#     version: ""          # optional, becomes part of the file name -> forces re-download
+#     checksum: ""         # optional, "sha256:<hex>"
+#     private_browsing: true
+#     verify_firstrun: false  # wait until the extension saved its first-run storage
+firefox_extensions: []
+# Extra Firefox policies of the site (merged over the common ones).
+firefox_policies_site: {}
+# Extra Firefox policies of the profile (merged last). Bookmarks, WebsiteFilter, ...
+firefox_policies_profile: {}
+
+# ---- Display service (profile type "display") ---------------------------------
+# A local service fetches the signage page periodically, keeps the last good
+# copy and serves it on 127.0.0.1:<monitor_port>/display with an ETag.
+monitor_enabled: false
+monitor_url: "https://example.org/"
+monitor_refresh_minutes: 5
+monitor_port: 8081
+monitor_expect: any                   # svg | html | any — sanity check of the response
+
+# ---- Installer (preseed / Raspberry Pi) ------------------------------------
+install_locale: en_US.UTF-8
+install_keymap: us
+install_timezone: UTC
+# SHA-512 crypt hash of the local admin password: mkpasswd --method=sha-512
+install_admin_password_hash: "CHANGE_ME"

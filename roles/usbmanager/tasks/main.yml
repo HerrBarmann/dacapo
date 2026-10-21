@@ -1,0 +1,23 @@
+---
+# ============================================================================
+# Role usbmanager — USB automount (udiskie) and the local web page "USB drive"
+# (127.0.0.1:8080, runs inside the session as the kiosk user): delete files on
+# drives, save downloads, eject safely. Linked from home page, bookmarks and
+# bar. Started from /etc/sway/config.
+# ============================================================================
+- name: Install USB packages
+  ansible.builtin.apt:
+    name: "{{ usbmanager_packages }}"
+    state: present
+
+- name: USB manager script
+  ansible.builtin.copy:
+    src: usbmanager.py
+    dest: /opt/kiosk/usbmanager.py
+    mode: "0755"
+
+- name: USB manager configuration (texts, colours, fonts)
+  ansible.builtin.copy:
+    content: "{{ {'texts': usbmanager_texts_default | combine(usbmanager_texts), 'style': usbmanager_style_default | combine(usbmanager_style)} | to_nice_json(indent=2) }}\n"
+    dest: /opt/kiosk/usbmanager.json
+    mode: "0644"

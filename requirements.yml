@@ -1,0 +1,5 @@
+---
+# Collections used by the playbook. Both ship with Debian's "ansible" package;
+# on a workstation: ansible-galaxy collection install -r requirements.yml
+collections:
+  - name: ansible.posix

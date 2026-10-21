@@ -1,0 +1,52 @@
+---
+# ============================================================================
+# Demo site — fleet-wide settings of this site. Everything here overrides
+# dacapo/vars/defaults.yml (the reference of all variables). Profile
+# specific values live in profiles/<name>.yml, secrets in secrets.yml.
+# ============================================================================
+
+# ---- Branding ---------------------------------------------------------------
+kiosk_brand_name: "Demo Kiosk"
+kiosk_language: en
+kiosk_locale: en_US.UTF-8
+keyboard_layout: us
+kiosk_font_family: "URW Gothic"            # free geometric sans (fonts-urw-base35)
+kiosk_font_stack: ["DejaVu Sans"]
+kiosk_logo: logo.png                       # assets/ — dark mark for light pages
+kiosk_logo_light: logo-light.png           # assets/ — light mark for the dark bar
+
+color_accent: "#0E7C86"
+color_accent_hover: "#139AA6"
+color_danger: "#B3261E"
+color_danger_hover: "#D33A31"
+
+# ---- Texts ------------------------------------------------------------------
+text_bar_host: "Host: {}"
+text_bar_usb: "USB drive"
+text_bar_reset: "End session"
+text_bar_clock: "{:%a %Y-%m-%d  %H:%M}"
+text_idle_title: "Still there?"
+text_idle_body: "This session ends automatically in <b>{seconds} {unit}</b> and all data will be deleted."
+text_idle_hint: "Move the mouse or press any key to continue."
+
+# ---- Devices ----------------------------------------------------------------
+# Marker file and per-device overrides (defaults shown).
+kiosk_state_dir: /etc/kiosk
+kiosk_default_profile: browser             # devices without marker or known hostname prefix
+
+# ---- Convergence and maintenance ----------------------------------------------
+pull_interval: 30min
+nightly_reboot_time: "04:00"
+apt_update_lists_time: "02:30"
+apt_upgrade_time: "03:00"
+
+# ---- Network ----------------------------------------------------------------
+wlan_fallback_enabled: false               # true: files/wpa-kiosk-wlan.conf must exist
+
+# ---- Installer --------------------------------------------------------------
+install_locale: en_US.UTF-8
+install_keymap: us
+install_timezone: Europe/Berlin
+
+# ---- Site-wide Firefox policies (merged over the core defaults) ---------------
+firefox_policies_site: {}

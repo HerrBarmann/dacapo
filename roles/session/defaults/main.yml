@@ -1,0 +1,16 @@
+---
+# Role session — Wayland session (sway) with optional bar (waybar), idle
+# watchdog, screensaver, site fonts and assets. Shared variables are
+# documented in vars/defaults.yml; only package lists live here.
+session_packages:
+  - sway                    # Wayland compositor (kiosk window manager)
+  - swayidle                # idle detection -> warning + reset
+  - mako-notifier           # idle warning as a popup (overlay layer, moves nothing)
+  - libnotify-bin           # notify-send for the countdown script
+  - waybar                  # bar with the "end session" button
+  - foot                    # fallback terminal only, never visible in the kiosk
+  - fonts-dejavu
+  - fonts-liberation        # metric-compatible with Arial/Times etc.
+  - fonts-noto-color-emoji  # otherwise tofu boxes on web pages
+  - fonts-urw-base35        # "URW Gothic" and friends: free default UI font
+  - fonts-font-awesome      # icons in the bar (USB, power)

@@ -1,0 +1,63 @@
+#!/bin/bash
+# kiosk-screensaver.sh — screensaver of the kiosk session.
+# (Jinja2 template roles/session/templates/kiosk-screensaver.sh.j2)
+# Called by swayidle:  start  (after inactivity)  |  stop  (on input)
+#
+# Deliberately WITHOUT an image viewer program: viewers such as imv have a
+# built-in command mode (":exec …") that could be used to break out of the
+# kiosk. Instead sway sets the image as the background and switches to an
+# empty workspace where nothing reacts to keys or clicks. Firefox stays
+# untouched on workspace 1.
+set -u
+
+WALLPAPERS=/opt/kiosk/wallpaper
+log() { logger -t kiosk-screensaver "$*"; }
+
+# Pick an image: the folder with the closest aspect ratio (on a tie the
+# smallest one that still fills the screen) and a random image inside.
+# Output: "<path> <fill|fit>". "fill" covers the screen without borders; if
+# the aspect ratio differs by more than 3 % the image is fitted so nothing
+# gets cropped.
+pick_wallpaper() {
+    swaymsg -t get_outputs -r | python3 -I -c '
+import json, os, random, sys
+root = sys.argv[1]
+outs = [o for o in json.load(sys.stdin) if o.get("active") and o.get("current_mode")]
+w, h = (outs[0]["current_mode"]["width"], outs[0]["current_mode"]["height"]) if outs else (1920, 1080)
+dirs = []
+for d in os.listdir(root):
+    try:
+        dw, dh = (int(x) for x in d.split("x"))
+    except ValueError:
+        continue
+    imgs = [f for f in os.listdir(os.path.join(root, d)) if f.lower().endswith((".png", ".jpg", ".jpeg"))]
+    if imgs:
+        dirs.append((abs(dw / dh - w / h), dw < w, dw, d, imgs))
+if not dirs:
+    sys.exit(1)
+dirs.sort()
+diff, _, _, d, imgs = dirs[0]
+mode = "fill" if diff / (w / h) <= 0.03 else "fit"
+print(os.path.join(root, d, random.choice(imgs)), mode)
+' "$WALLPAPERS"
+}
+
+case "${1:-}" in
+start)
+    read -r img mode < <(pick_wallpaper) || { log "no image found"; exit 0; }
+    swaymsg "output * bg \"$img\" $mode {{ color_screensaver_bg | lower }}" >/dev/null
+    swaymsg "workspace screensaver" >/dev/null
+    pkill -u "$(id -u)" -x waybar
+    log "started: $(basename "$img") ($mode)"
+    ;;
+stop)
+    swaymsg "workspace 1" >/dev/null
+    swaymsg "output * bg {{ color_desktop_bg | lower }} solid_color" >/dev/null
+    pgrep -u "$(id -u)" -x waybar >/dev/null || swaymsg "exec waybar" >/dev/null
+    ;;
+*)
+    echo "usage: $0 start|stop" >&2
+    exit 2
+    ;;
+esac
+exit 0

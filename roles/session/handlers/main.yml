@@ -1,0 +1,13 @@
+---
+- name: Refresh font cache
+  ansible.builtin.command: fc-cache -f
+  changed_when: true
+
+# SIGUSR2 makes waybar reread configuration and style — bar changes become
+# visible right after the pull instead of after the next reboot.
+- name: Reload waybar
+  ansible.builtin.command: pkill -USR2 -x waybar
+  register: waybar_reload
+  failed_when: false
+  changed_when: waybar_reload.rc == 0
+  when: not in_chroot | bool

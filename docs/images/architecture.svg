@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" width="1200" height="560" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="16">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#5c5c5c"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="560" fill="#ffffff"/>
+
+  <!-- dacapo (public) -->
+  <rect x="40" y="40" width="340" height="230" fill="#f4f4f2" stroke="#0E7C86" stroke-width="3"/>
+  <text x="60" y="72" font-size="20" font-weight="700" fill="#0E7C86">dacapo</text>
+  <text x="60" y="94" fill="#5c5c5c">public · AGPL-3.0</text>
+  <text x="60" y="130" font-family="DejaVu Sans Mono, monospace" font-size="14">local.yml          one playbook</text>
+  <text x="60" y="152" font-family="DejaVu Sans Mono, monospace" font-size="14">vars/defaults.yml  every variable</text>
+  <text x="60" y="174" font-family="DejaVu Sans Mono, monospace" font-size="14">roles/  base session firefox</text>
+  <text x="60" y="196" font-family="DejaVu Sans Mono, monospace" font-size="14">        usbmanager monitor</text>
+  <text x="60" y="218" font-family="DejaVu Sans Mono, monospace" font-size="14">preseed/ raspberry/ tests/</text>
+  <text x="60" y="250" fill="#5c5c5c" font-size="14">no branding, no secrets, no fonts</text>
+
+  <!-- site repository (private) -->
+  <rect x="440" y="40" width="340" height="230" fill="#f4f4f2" stroke="#111111" stroke-width="3"/>
+  <text x="460" y="72" font-size="20" font-weight="700">your-kiosk-site</text>
+  <text x="460" y="94" fill="#5c5c5c">private Git repository</text>
+  <text x="460" y="130" font-family="DejaVu Sans Mono, monospace" font-size="14">core/      ← submodule</text>
+  <text x="460" y="152" font-family="DejaVu Sans Mono, monospace" font-size="14">site/site.yml   brand, texts</text>
+  <text x="460" y="174" font-family="DejaVu Sans Mono, monospace" font-size="14">site/secrets.yml token, hash</text>
+  <text x="460" y="196" font-family="DejaVu Sans Mono, monospace" font-size="14">site/profiles/  browser app display</text>
+  <text x="460" y="218" font-family="DejaVu Sans Mono, monospace" font-size="14">site/templates/ assets/ fonts/</text>
+  <text x="460" y="250" fill="#5c5c5c" font-size="14">everything that makes the fleet yours</text>
+
+  <!-- submodule arrow -->
+  <line x1="380" y1="140" x2="438" y2="140" stroke="#5c5c5c" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- installer media -->
+  <rect x="840" y="40" width="320" height="110" fill="#ffffff" stroke="#5c5c5c" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="860" y="72" font-size="18" font-weight="700">Installer media</text>
+  <text x="860" y="98" font-size="14">preseed ISO (PC, boot menu per profile)</text>
+  <text x="860" y="120" font-size="14">firstrun.sh (Raspberry Pi SD card)</text>
+  <text x="860" y="140" font-size="12" fill="#5c5c5c">built from the site: URL, token, CA, profiles</text>
+  <line x1="780" y1="95" x2="838" y2="95" stroke="#5c5c5c" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ansible-pull arrows -->
+  <line x1="610" y1="270" x2="610" y2="330" stroke="#5c5c5c" stroke-width="2"/>
+  <line x1="200" y1="330" x2="1000" y2="330" stroke="#5c5c5c" stroke-width="2"/>
+  <text x="620" y="292" font-size="14" fill="#5c5c5c">ansible-pull every 30 min with a read-only deploy token,</text>
+  <text x="620" y="312" font-size="14" fill="#5c5c5c">at boot and once inside the installer chroot</text>
+  <line x1="200" y1="330" x2="200" y2="378" stroke="#5c5c5c" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="600" y1="330" x2="600" y2="378" stroke="#5c5c5c" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="1000" y1="330" x2="1000" y2="378" stroke="#5c5c5c" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- devices -->
+  <g>
+    <rect x="40" y="380" width="320" height="150" fill="#1A1A1A"/>
+    <rect x="40" y="380" width="320" height="4" fill="#0E7C86"/>
+    <text x="60" y="412" fill="#ffffff" font-size="18" font-weight="700">kiosk-3a9f2c · browser</text>
+    <text x="60" y="438" fill="#B5B5B5" font-size="14">Firefox with address + bookmark bar</text>
+    <text x="60" y="460" fill="#B5B5B5" font-size="14">USB drives · screensaver · reset 10 min</text>
+    <text x="60" y="482" fill="#B5B5B5" font-size="14">PC, Debian 13, /home/kiosk on tmpfs</text>
+    <text x="60" y="512" fill="#0E7C86" font-size="13">autologin → sway → Firefox ESR</text>
+  </g>
+  <g>
+    <rect x="440" y="380" width="320" height="150" fill="#1A1A1A"/>
+    <rect x="440" y="380" width="320" height="4" fill="#0E7C86"/>
+    <text x="460" y="412" fill="#ffffff" font-size="18" font-weight="700">terminal-8c01de · app</text>
+    <text x="460" y="438" fill="#B5B5B5" font-size="14">one web application, chrome hidden</text>
+    <text x="460" y="460" fill="#B5B5B5" font-size="14">WebsiteFilter · fullscreen guard · 90 s</text>
+    <text x="460" y="482" fill="#B5B5B5" font-size="14">PC, Debian 13, /home/kiosk on tmpfs</text>
+    <text x="460" y="512" fill="#0E7C86" font-size="13">autologin → sway → Firefox ESR</text>
+  </g>
+  <g>
+    <rect x="840" y="380" width="320" height="150" fill="#1A1A1A"/>
+    <rect x="840" y="380" width="320" height="4" fill="#0E7C86"/>
+    <text x="860" y="412" fill="#ffffff" font-size="18" font-weight="700">display-foyer · display</text>
+    <text x="860" y="438" fill="#B5B5B5" font-size="14">Firefox --kiosk, no bar, no pointer</text>
+    <text x="860" y="460" fill="#B5B5B5" font-size="14">local display service caches the board</text>
+    <text x="860" y="482" fill="#B5B5B5" font-size="14">PC or Raspberry Pi 4/5, Pi OS Lite</text>
+    <text x="860" y="512" fill="#0E7C86" font-size="13">autologin → sway → Firefox ESR</text>
+  </g>
+</svg>

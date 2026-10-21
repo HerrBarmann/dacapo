@@ -1,0 +1,78 @@
+---
+# Role usbmanager — USB drives in the kiosk (usb_enabled: true).
+usbmanager_packages:
+  - udisks2     # mounts USB drives (polkit allows it for the active seat session)
+  - udiskie     # automount inside the kiosk session
+
+# Texts and looks of the "USB drive" page. The site overrides single keys in
+# usbmanager_texts / usbmanager_style (merged over these defaults); colours
+# and fonts default to the site-wide values.
+usbmanager_texts_default:
+  page_title: "USB drive — {{ kiosk_brand_name }}"
+  title_a: "USB drive"
+  title_b: "manager"
+  hint: "Shared USB drives are used by many people: please delete your files after printing. Use your own drive for anything confidential."
+  no_stick_title: "No USB drive connected"
+  no_stick_text: "Plug in your drive — it appears here automatically after a few seconds."
+  stick_panel: "USB drive"
+  eject: "Eject safely"
+  eject_confirm: "Eject drive “{label}” now?"
+  free_of: "{free} free of {total}"
+  folder: "Folder:"
+  select_all: "Select all"
+  size: "Size"
+  modified: "Modified"
+  open: "open"
+  open_title: "Open in the browser"
+  delete_selected: "Delete selected"
+  delete_selected_confirm: "Permanently delete the selected entries?"
+  delete_all: "Delete everything in this folder"
+  delete_all_confirm: "Really delete ALL files in this folder?"
+  folder_empty_title: "This folder is empty"
+  folder_empty_text: "Copy downloads from the right-hand column here."
+  downloads_panel: "Downloads of this session"
+  downloads_empty_title: "No downloads yet"
+  downloads_empty_text: "Downloaded files appear here and can be copied to the drive."
+  downloads_deleted_note: "Downloads are deleted when the session ends."
+  copy_to_stick: "Copy to the drive →"
+  delete: "Delete"
+  delete_downloads_confirm: "Delete the selected downloads?"
+  target: "Target: {target}"
+  plug_in_first: "Plug in a USB drive first to copy files."
+  msg_no_downloads_selected: "No downloads selected."
+  msg_downloads_deleted: "{n} download(s) deleted."
+  msg_no_stick: "No USB drive connected (any more)."
+  msg_invalid_path: "Invalid path."
+  msg_nothing_selected: "Nothing selected."
+  msg_delete_error: "Error deleting {name}: {error}"
+  msg_deleted: "{n} entry/entries deleted."
+  msg_copy_error: "Error copying {name}: {error}"
+  msg_copied: "{n} file(s) copied to the drive."
+  msg_renamed: " {n} file name(s) adjusted so they work on all devices (special characters replaced by _)."
+  msg_ejected: "“{label}” was ejected safely — the drive can be removed now."
+  msg_eject_error: "The drive could not be ejected: {error}"
+  msg_unknown_action: "Unknown action."
+  msg_device_unknown: "Device unknown"
+  msg_bad_link: "Invalid link — please reload the “USB drive” page."
+  msg_cannot_open: "This file cannot be opened in the browser. Only PDF documents and e-books (EPUB) can be opened."
+  back: "Back to the overview"
+  forbidden: "Not allowed."
+  not_found: "Not found."
+  bad_token: "Invalid token — please reload the page."
+  file_fallback_name: "File"
+  date_format: "%Y-%m-%d %H:%M"
+  lang: "{{ kiosk_language }}"
+usbmanager_texts: {}
+
+usbmanager_style_default:
+  font_family: "{{ kiosk_css_font_family }}"
+  accent: "{{ color_accent }}"
+  ink: "#111111"
+  muted: "#5c5c5c"
+  paper: "#f4f4f2"
+  line: "#e0e0dc"
+  danger: "{{ color_danger }}"
+  secondary: "{{ color_accent }}"
+  logo: "{{ kiosk_logo }}"       # file in /opt/kiosk/homepage/assets/
+  decoration: ""                 # optional image behind the title word (e.g. brush.png)
+usbmanager_style: {}

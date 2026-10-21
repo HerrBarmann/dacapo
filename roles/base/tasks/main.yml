@@ -1,0 +1,285 @@
+---
+# ============================================================================
+# Role base — OS foundation (all profiles, Debian 13 and Raspberry Pi OS 13):
+# packages, optional internal CA, Wi-Fi fallback, remote maintenance, kiosk
+# user with tmpfs home, autologin -> sway, ansible-pull timer, nightly reboot,
+# automatic security updates.
+# ============================================================================
+
+# ---- Profile marker --------------------------------------------------------
+# Makes the (possibly hostname-derived) profile explicit and permanent.
+- name: State directory
+  ansible.builtin.file:
+    path: "{{ kiosk_profile_file | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Write profile marker
+  ansible.builtin.copy:
+    content: "{{ kiosk_profile }}\n"
+    dest: "{{ kiosk_profile_file }}"
+    mode: "0644"
+
+# ---- Packages --------------------------------------------------------------
+# During the first run (installer chroot) the CD-ROM source is still in
+# sources.list and breaks apt update. The installer removes it only AFTER our
+# bootstrap, so we do it ourselves.
+- name: Disable installer CD-ROM apt source
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list
+    regexp: '^deb cdrom:'
+    replace: '# deb cdrom:'
+  failed_when: false
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ kiosk_packages_base + kiosk_packages_extra }}"
+    state: present
+    update_cache: true
+
+- name: Install firmware packages (PC hardware only)
+  ansible.builtin.apt:
+    name: "{{ kiosk_packages_firmware_x86 }}"
+    state: present
+  when: ansible_facts['architecture'] == 'x86_64'
+
+# ---- Optional internal CA ---------------------------------------------------
+# The installer already ships the CA (chicken and egg); this task keeps it
+# current afterwards (CA rotation).
+- name: Trust the site CA
+  ansible.builtin.copy:
+    src: "{{ kiosk_site_dir }}/files/ca.crt"
+    dest: "/usr/local/share/ca-certificates/{{ kiosk_ca_name }}.crt"
+    mode: "0644"
+  notify: Update ca certificates
+  when: ca_enabled | bool
+
+- name: Kiosk directory /opt/kiosk
+  ansible.builtin.file:
+    path: /opt/kiosk
+    state: directory
+    mode: "0755"
+
+# ---- Wi-Fi fallback ----------------------------------------------------------
+- name: Set up Wi-Fi fallback
+  ansible.builtin.include_tasks: wlan.yml
+  when: wlan_fallback_enabled | bool
+
+# ---- Remote maintenance -----------------------------------------------------
+# <site>/files/authorized_keys is THE admin list (one key per line). The file
+# is replaced completely: remove an admin = delete the line, commit -> access
+# is gone with the next pull.
+- name: Ensure admin user (otherwise created by the installer/imager)
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    shell: /bin/bash
+    groups: sudo
+    append: true
+
+- name: Admin .ssh directory
+  ansible.builtin.file:
+    path: "/home/{{ admin_user }}/.ssh"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0700"
+
+- name: Check for site authorized_keys
+  ansible.builtin.stat:
+    path: "{{ kiosk_site_dir }}/files/authorized_keys"
+  register: _authorized_keys
+  delegate_to: localhost
+  become: false
+
+- name: Deploy admin SSH keys (central list)
+  ansible.builtin.copy:
+    src: "{{ kiosk_site_dir }}/files/authorized_keys"
+    dest: "/home/{{ admin_user }}/.ssh/authorized_keys"
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0600"
+  when: _authorized_keys.stat.exists
+
+- name: Warn about missing admin keys
+  ansible.builtin.debug:
+    msg: "WARNING: {{ kiosk_site_dir }}/files/authorized_keys is missing — SSH allows key login only, nobody will be able to log in remotely."
+  when: not _authorized_keys.stat.exists
+
+- name: Sshd drop-in directory
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d
+    state: directory
+    mode: "0755"
+
+- name: Harden SSH (keys only, no root)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/50-kiosk.conf
+    mode: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+  notify: Restart ssh
+
+# ---- Unprivileged kiosk user --------------------------------------------------
+# Session/device access comes from systemd-logind (autologin on tty1 creates
+# a full logind session) — no seatd needed. video/input exist on every Debian
+# with udev; ensured here for robustness (container tests, minimal installs).
+- name: Device groups for the session
+  ansible.builtin.group:
+    name: "{{ item }}"
+    system: true
+    state: present
+  loop:
+    - video
+    - input
+
+- name: Create kiosk user (no sudo, locked password)
+  ansible.builtin.user:
+    name: "{{ kiosk_user }}"
+    password: "!"
+    shell: /bin/bash
+    groups: video,input
+    append: true
+    create_home: true
+
+# ---- Zero persistence: home on tmpfs -----------------------------------------
+# Every boot -> fresh, empty home in RAM. noexec/nosuid/nodev: downloaded
+# files cannot be executed. (In the chroot only the fstab entry is written.)
+- name: Kiosk home as tmpfs (fstab)
+  ansible.posix.mount:
+    path: "{{ kiosk_home }}"
+    src: tmpfs
+    fstype: tmpfs
+    opts: "defaults,noexec,nosuid,nodev,mode=0755,uid={{ kiosk_user }},gid={{ kiosk_user }},size={{ kiosk_home_tmpfs_size }}"
+    state: "{{ 'present' if in_chroot | bool else 'mounted' }}"
+
+# ---- Autologin of the kiosk user on tty1 -------------------------------------
+- name: Getty override directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/getty@tty1.service.d
+    state: directory
+    mode: "0755"
+
+- name: Autologin kiosk@tty1
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/getty@tty1.service.d/override.conf
+    mode: "0644"
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart=-/sbin/agetty --autologin {{ kiosk_user }} --noclear %I $TERM
+  notify: Reload systemd
+
+- name: Start sway from profile.d on tty1
+  ansible.builtin.template:
+    src: profile-kiosk-sway.sh.j2
+    dest: /etc/profile.d/zz-kiosk-sway.sh
+    mode: "0644"
+
+# ---- ansible-pull timer (continuous convergence) -----------------------------
+- name: Ansible-pull service unit
+  ansible.builtin.template:
+    src: ansible-pull.service.j2
+    dest: /etc/systemd/system/ansible-pull.service
+    mode: "0600"           # contains the deploy token
+  notify: Reload systemd
+
+- name: Ansible-pull timer unit
+  ansible.builtin.template:
+    src: ansible-pull.timer.j2
+    dest: /etc/systemd/system/ansible-pull.timer
+    mode: "0644"
+  notify: Reload systemd
+
+# "systemctl enable" instead of the systemd module: works inside the installer
+# chroot without a running systemd bus (only creates symlinks).
+- name: Enable ansible-pull.timer
+  ansible.builtin.command: systemctl enable ansible-pull.timer  # noqa: command-instead-of-module (chroot-safe, see above)
+  args:
+    creates: /etc/systemd/system/timers.target.wants/ansible-pull.timer
+
+- name: Start ansible-pull.timer (running system only)
+  ansible.builtin.systemd_service:
+    name: ansible-pull.timer
+    state: started
+    daemon_reload: true
+  when: not in_chroot | bool
+
+# ---- Nightly reboot (clean state, applies kernel updates) --------------------
+- name: Nightly-reboot service unit
+  ansible.builtin.template:
+    src: nightly-reboot.service.j2
+    dest: /etc/systemd/system/nightly-reboot.service
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Nightly-reboot timer unit
+  ansible.builtin.template:
+    src: nightly-reboot.timer.j2
+    dest: /etc/systemd/system/nightly-reboot.timer
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Enable nightly-reboot.timer
+  ansible.builtin.command: systemctl enable nightly-reboot.timer  # noqa: command-instead-of-module (chroot-safe, see above)
+  args:
+    creates: /etc/systemd/system/timers.target.wants/nightly-reboot.timer
+
+- name: Start nightly-reboot.timer (running system only)
+  ansible.builtin.systemd_service:
+    name: nightly-reboot.timer
+    state: started
+    daemon_reload: true
+  when: not in_chroot | bool
+
+# ---- Automatic security updates ----------------------------------------------
+# Debian's default (50unattended-upgrades) pulls everything from
+# <codename>-security — including firefox-esr. Together with the nightly
+# reboot, kernel updates become effective promptly as well.
+- name: Enable unattended-upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    mode: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+# Apply updates BEFORE the nightly reboot instead of Debian's 06:00-07:00:
+# otherwise a Firefox update would land under a running Firefox.
+# Persistent=true (Debian default): a device that was off catches up at boot.
+- name: Drop-in directories for the apt timers
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item }}.timer.d"
+    state: directory
+    mode: "0755"
+  loop:
+    - apt-daily
+    - apt-daily-upgrade
+
+- name: Schedule package lists (apt-daily)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/apt-daily.timer.d/kiosk.conf
+    mode: "0644"
+    content: |
+      [Timer]
+      OnCalendar=
+      OnCalendar=*-*-* {{ apt_update_lists_time }}
+      RandomizedDelaySec=15min
+  notify:
+    - Reload systemd
+    - Restart apt timers
+
+- name: Schedule upgrades (apt-daily-upgrade)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/apt-daily-upgrade.timer.d/kiosk.conf
+    mode: "0644"
+    content: |
+      [Timer]
+      OnCalendar=
+      OnCalendar=*-*-* {{ apt_upgrade_time }}
+      RandomizedDelaySec=15min
+  notify:
+    - Reload systemd
+    - Restart apt timers

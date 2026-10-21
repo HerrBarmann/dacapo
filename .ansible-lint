@@ -1,0 +1,11 @@
+---
+profile: production
+skip_list:
+  - yaml[line-length]
+  # Switches such as idle_seconds, waybar_enabled or firefox_mode are shared
+  # by several roles on purpose: a profile describes a kiosk, not a role.
+  - var-naming[no-role-prefix]
+exclude_paths:
+  - tests/out/
+  - examples/
+  - docs/

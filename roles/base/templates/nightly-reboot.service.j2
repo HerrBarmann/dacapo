@@ -1,0 +1,12 @@
+# /etc/systemd/system/nightly-reboot.service (deployed by ansible-pull)
+# Reboot into a guaranteed clean state (tmpfs home is emptied, pending
+# kernel/Firefox updates become effective).
+[Unit]
+Description={{ kiosk_brand_name }} nightly reboot
+# If an automatic update is still running, wait for it — an interrupted dpkg
+# would leave packages half installed.
+After=apt-daily.service apt-daily-upgrade.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl reboot
