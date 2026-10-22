@@ -93,9 +93,11 @@ sed -e "s|@@PROFILE@@|$DEFAULT_PROFILE|g" \
     -e "s|@@PREFIX_CASES@@|$PREFIX_CASES|g" \
     -e "s|@@CA_COMMANDS@@|$CA_COMMANDS|g" \
     preseed.cfg > "$WORK/preseed.cfg"
-if grep -q "CHANGE_ME\|@@" "$WORK/preseed.cfg"; then
+# Only real preseed lines count — the header comment of preseed.cfg mentions
+# the @@...@@ notation itself.
+if grep -vE '^[[:space:]]*#' "$WORK/preseed.cfg" | grep -q "CHANGE_ME\|@@"; then
     echo "ERROR: preseed.cfg still contains placeholders:" >&2
-    grep -n "CHANGE_ME\|@@" "$WORK/preseed.cfg" >&2
+    grep -vE '^[[:space:]]*#' "$WORK/preseed.cfg" | grep -n "CHANGE_ME\|@@" >&2
     exit 1
 fi
 
