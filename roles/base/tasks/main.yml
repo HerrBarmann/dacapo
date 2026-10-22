@@ -37,10 +37,39 @@
     state: present
     update_cache: true
 
+# Firmware lives in the non-free-firmware component, which the Debian
+# installer enables by default but minimal images (containers, cloud images)
+# do not. Enable it in both source formats before installing.
+- name: Check apt source files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/apt/sources.list.d/debian.sources
+    - /etc/apt/sources.list
+  register: _apt_sources
+  when: ansible_facts['architecture'] == 'x86_64'
+
+- name: Enable non-free-firmware (deb822 sources)
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list.d/debian.sources
+    regexp: '^(Components:(?:(?!non-free-firmware).)*)$'
+    replace: '\1 non-free-firmware'
+  when: ansible_facts['architecture'] == 'x86_64' and _apt_sources.results[0].stat.exists
+  register: _firmware_component_deb822
+
+- name: Enable non-free-firmware (sources.list)
+  ansible.builtin.replace:
+    path: /etc/apt/sources.list
+    regexp: '^(deb\s+(?:\[[^\]]*\]\s+)?\S+\s+\S+\s+main(?:(?!non-free-firmware).)*)$'
+    replace: '\1 non-free-firmware'
+  when: ansible_facts['architecture'] == 'x86_64' and _apt_sources.results[1].stat.exists
+  register: _firmware_component_list
+
 - name: Install firmware packages (PC hardware only)
   ansible.builtin.apt:
     name: "{{ kiosk_packages_firmware_x86 }}"
     state: present
+    update_cache: "{{ _firmware_component_deb822 is changed or _firmware_component_list is changed }}"
   when: ansible_facts['architecture'] == 'x86_64'
 
 # ---- Optional internal CA ---------------------------------------------------
