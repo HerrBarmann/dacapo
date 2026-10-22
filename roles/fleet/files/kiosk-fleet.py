@@ -25,13 +25,17 @@ One run (systemd timer, see kiosk-fleet.timer):
      changed; remove keys from host.yml that now hold the same value as the
      server (they were taken over there)
      then run the actions that do not reboot (pull-now, update-now)
-  5. report: POST /report with the device state and the finished action tokens
+  5. report: POST /report with the device state and the finished action tokens;
+     then, only when they changed, the files the screen is made of (bar,
+     home page with its images, Firefox policies) to /fleet/preview, so the
+     server can show a preview of the screen
   6. reboot if requested
 
 Standard library only; runs as root (hostnamectl, apt, systemctl). Config in
 FLEET_CONFIG (JSON, written by the ansible role), state in state_dir.
 """
 import fcntl
+import hashlib
 import json
 import os
 import platform
@@ -49,7 +53,7 @@ import urllib.request
 from base64 import b64encode
 from datetime import datetime, timedelta
 
-VERSION = "0.3.1"
+VERSION = "0.3.2"
 JINJA_RE = re.compile(r"\{\{|\{%|\{#|%\}|#\}|\}\}")
 CONFIG = os.environ.get("FLEET_CONFIG", "/etc/kiosk/fleet.json")
 TIMEOUT = 20
@@ -366,6 +370,51 @@ def fetch_actions(cfg, name, tok, ident):
     return [], None, status
 
 
+# ---------- preview of the screen ----------
+PREVIEW_FILE_MAX = 400_000
+PREVIEW_ASSET_MAX = 700_000
+PREVIEW_ASSET_EXT = (".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif")
+
+
+def collect_preview(cfg):
+    """Files of the screen for the server's preview: bar, home page and its images, Firefox policies (paths from the role)."""
+    pv = cfg.get("preview") or {}
+    files = {}
+    for key, path in (pv.get("files") or {}).items():
+        try:
+            if os.path.getsize(path) <= PREVIEW_FILE_MAX:
+                with open(path, encoding="utf-8", errors="replace") as fh:
+                    files[key] = fh.read()
+        except OSError:
+            continue
+    assets = {}
+    d = pv.get("assets_dir") or ""
+    for name in sorted(os.listdir(d)) if d and os.path.isdir(d) else []:
+        path = os.path.join(d, name)
+        if name.lower().endswith(PREVIEW_ASSET_EXT) and os.path.isfile(path) and os.path.getsize(path) <= PREVIEW_ASSET_MAX:
+            with open(path, "rb") as fh:
+                assets[name] = b64encode(fh.read()).decode()
+    return {"files": files, "assets": dict(list(assets.items())[:24]), "meta": pv.get("meta") or {}}
+
+
+def send_preview(cfg, name, tok, ident, state):
+    """Send the screen files when they changed since the last accepted upload (hash in the state file)."""
+    if not cfg.get("preview"):
+        return
+    pv = collect_preview(cfg)
+    digest = hashlib.sha256(json.dumps(pv, sort_keys=True).encode()).hexdigest()[:16]
+    if digest == state.get("preview_hash") or not pv["files"]:
+        return
+    body = dict(pv, hostname=name.upper(), serial=ident["serial"], macs=ident["macs"], hash=digest)
+    status, data = http(cfg, "POST", "/fleet/preview", body, headers={"X-Client-Token": tok}, auth=True, timeout=60)
+    if status == 200:
+        log("preview of the screen sent")
+    elif status != 404:          # 404: the server has no preview (older server)
+        log(f"preview not accepted: {status} {str(data)[:200]}")
+    if status in (200, 400, 404, 413):   # final answers: send again only when the files change
+        state["preview_hash"] = digest
+
+
 # ---------- settings from the server ----------
 def _has_jinja(value):
     if isinstance(value, str):
@@ -535,6 +584,10 @@ def main():
     else:
         state["last_report"] = iso(datetime.now())
         state.pop("last_report_error", None)
+        try:
+            send_preview(cfg, name, tok, ident, state)
+        except (OSError, ValueError) as exc:
+            log(f"preview not sent: {exc}")
     write_state(cfg, state)
     if reboot:
         log("action: reboot")
