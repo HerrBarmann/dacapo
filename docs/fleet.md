@@ -3,7 +3,8 @@
 The optional role `fleet` connects every device to a management server: the
 device takes its **name and profile** from the server, **reports its state**
 every few minutes and **runs actions** an admin requested there (pull the
-configuration now, install updates now, reboot). The configuration itself
+configuration now, install updates now, reboot). It also sends the files its
+screen is built from, so the server can show a **preview** of the screen. The configuration itself
 still comes from the site repository via `ansible-pull`; the server only
 names, watches and nudges the devices.
 
@@ -86,6 +87,8 @@ it is set up, two minutes after boot and then every `fleet_report_interval`:
    (`apt-get update && apt-get upgrade`); remember `reboot` for the end.
 5. Report: `POST /report` with the state and the tokens of the finished
    actions; then reboot if requested.
+6. Preview: if the screen files changed since the last accepted upload,
+   `POST /fleet/preview` (see below). Failures here never fail the run.
 
 Each device creates its own random secret on first contact
 (`/var/lib/kiosk-fleet/token`, 0600) and sends it as `X-Client-Token`; the
@@ -105,6 +108,7 @@ over HTTPS. Host names travel in upper case; the device uses lower case.
 | `POST /fleet/enroll`, header `X-Enroll-Key` | `{"serial", "macs", "model", "profile", "old_hostname"}` | `200 {"state": "approved", "hostname", "profile"}` (created or re-admitted) or `{"state": "waiting", "code", "url"}`; `403` for a wrong key |
 | `GET /clients/<HOSTNAME>.json`, headers `X-Client-Token`, `X-Client-Serial`, `X-Client-Macs` | – | `200 {"actions": [{"type", "token"}, …], "settings": {variable: value}, "settings_hash"}`; `403` if the secret does not match |
 | `POST /report`, header `X-Client-Token` | see below | `200`; `403` if serial/MAC or secret do not match |
+| `POST /fleet/preview`, header `X-Client-Token` | `{"hostname", "serial", "macs", "hash", "files": {"waybar_config", "waybar_style", "homepage", "policies"}, "assets": {name: base64}, "meta": {"firefox_mode", "waybar_enabled"}}` | `200`; `403` if the secret does not match; `404` from servers without previews; after `200`, `400`, `404` or `413` the reporter sends again only when the files change |
 
 Report body: `hostname`, `serial`, `macs`, `model`, `os_version`, `os_build`,
 `ip`, `uptime_hours`, `agent_version`, `last_run`, `install_date`,

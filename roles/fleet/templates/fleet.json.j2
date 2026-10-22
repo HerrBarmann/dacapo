@@ -11,5 +11,15 @@
   "core_version": dacapo_version | default(''),
   "settable": fleet_settable_vars | default([]),
   "vars_file": fleet_vars_file,
-  "host_vars_files": kiosk_host_vars_files | default([])
+  "host_vars_files": kiosk_host_vars_files | default([]),
+  "preview": {
+    "files": {
+      "waybar_config": "/etc/xdg/waybar/config",
+      "waybar_style": "/etc/xdg/waybar/style.css",
+      "homepage": "/opt/kiosk/homepage/index.html",
+      "policies": "/etc/firefox-esr/policies/policies.json"
+    },
+    "assets_dir": "/opt/kiosk/homepage/assets",
+    "meta": {"firefox_mode": firefox_mode | default("browser"), "waybar_enabled": waybar_enabled | default(true) | bool}
+  }
 } | to_nice_json(indent=2) }}

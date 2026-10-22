@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.2 — unreleased
+
+- fleet: after a successful report the reporter sends the files the screen
+  is built from (bar configuration and style, start page with its assets,
+  Firefox policies, Firefox mode) to `POST /fleet/preview`, only when their
+  hash changed. A management server can rebuild a picture of the screen from
+  them, like `tools/screenshots/compose.py`. A server without the endpoint
+  (404) is fine; the reporter tries again when the files change.
+- `dacapo_version` 0.3.2
+
 ## 0.3.1 — unreleased
 
 - fleet: `fleet_enabled: false` now switches the reporter off on the devices:

@@ -116,7 +116,7 @@ fleet_report_interval: 15min
 fleet_enroll_key: ""                  # secrets.yml: enrolment key issued by the server (unknown devices are adopted or wait there for an admin)
 fleet_repo_user: ""                   # secrets.yml: shared credentials of the Partitur package repository
 fleet_repo_password: ""
-dacapo_version: "0.3.1"               # shown by the management server next to the device
+dacapo_version: "0.3.2"               # shown by the management server next to the device
 # Settings the management server may set on the devices (variable names, e.g.
 # firefox_managed_bookmarks, monitor_url). The reporter writes them to
 # fleet_vars_file; the playbook loads it after the profile and before the
