@@ -20,7 +20,11 @@ One run (systemd timer, see kiosk-fleet.timer):
      Both endpoints sit behind the repository credentials, so the device can
      report from any network (public Wi-Fi included).
   3. actions: GET /clients/<HOST>.json (repo credentials + per-device token)
-  4. run the actions that do not reboot (pull-now, update-now)
+  4. settings: write the values the server sets (only fleet_settable_vars,
+     no Jinja braces) to fleet_vars_file and start ansible-pull when they
+     changed; remove keys from host.yml that now hold the same value as the
+     server (they were taken over there)
+     then run the actions that do not reboot (pull-now, update-now)
   5. report: POST /report with the device state and the finished action tokens
   6. reboot if requested
 
@@ -45,7 +49,8 @@ import urllib.request
 from base64 import b64encode
 from datetime import datetime, timedelta
 
-VERSION = "0.2.0"
+VERSION = "0.3.1"
+JINJA_RE = re.compile(r"\{\{|\{%|\{#|%\}|#\}|\}\}")
 CONFIG = os.environ.get("FLEET_CONFIG", "/etc/kiosk/fleet.json")
 TIMEOUT = 20
 
@@ -246,16 +251,30 @@ def iso(ts):
     return ts.replace(microsecond=0).isoformat()
 
 
-def pull_state():
-    """ansible-pull.service: last result and end time, checkout commit and branch."""
+def _stamp(value):
+    """systemd timestamp ("Thu 2026-10-22 18:38:02 CEST") as local ISO time, "" if empty."""
+    return run(["date", "-d", value, "+%Y-%m-%dT%H:%M:%S"]).strip() if value and value != "n/a" else ""
+
+
+def pull_state(state):
+    """ansible-pull.service: last finished run (result, end time), whether a run is going on right now (pull_running = start
+    time), checkout commit and branch. While a run is going on systemd clears the end time; the last finished run is then
+    taken from the state file, so the server does not mistake a running pull for a missing one."""
     out = {}
-    show = run(["systemctl", "show", "ansible-pull.service", "-p", "Result", "-p", "ExecMainExitTimestamp", "-p", "ExecMainStatus"])
+    show = run(["systemctl", "show", "ansible-pull.service", "-p", "Result", "-p", "ExecMainExitTimestamp", "-p", "ExecMainStatus",
+                "-p", "ActiveState", "-p", "ExecMainStartTimestamp"])
     props = dict(line.split("=", 1) for line in show.splitlines() if "=" in line)
-    if props.get("ExecMainExitTimestamp"):
-        stamp = run(["date", "-d", props["ExecMainExitTimestamp"], "+%Y-%m-%dT%H:%M:%S"]).strip()
+    if props.get("ActiveState") in ("activating", "active", "reloading"):
+        out["pull_running"] = _stamp(props.get("ExecMainStartTimestamp")) or "?"
+        last = state.get("pull_last_finished") or {}
+        if last.get("at"):
+            out["pull_last"], out["pull_result"] = last["at"], last.get("result", "")
+    else:
+        stamp = _stamp(props.get("ExecMainExitTimestamp"))
         if stamp:
             out["pull_last"] = stamp
             out["pull_result"] = props.get("Result") or ("success" if props.get("ExecMainStatus") == "0" else "exit-code")
+            state["pull_last_finished"] = {"at": stamp, "result": out["pull_result"]}
     # ansible-pull checks out into ~/.ansible/pull/<hostname>; after a rename the old checkout stays next to the new one, so
     # take the one fetched most recently
     best, best_time = None, -1.0
@@ -312,7 +331,7 @@ def os_release():
     return m.group(1) if m else platform.platform()
 
 
-def gather(cfg, name, ident, actions_done, clients_fetched):
+def gather(cfg, name, ident, actions_done, clients_fetched, state):
     now = datetime.now()
     try:
         uptime = float(read_first("/proc/uptime").split()[0])
@@ -324,7 +343,7 @@ def gather(cfg, name, ident, actions_done, clients_fetched):
              "updates_pending": pending, "updates_security": security,
              "disk_size_gb": round(usage.total / 1e9, 1), "disk_free_gb": round(usage.free / 1e9, 1),
              "load": round(os.getloadavg()[0], 2), "firefox_version": firefox_version(), "core_version": str(cfg.get("core_version") or "")}
-    kiosk.update(pull_state())
+    kiosk.update(pull_state(state))
     kiosk.update(monitor_state(cfg))
     install_date = ""
     try:
@@ -342,9 +361,110 @@ def fetch_actions(cfg, name, tok, ident):
     status, data = http(cfg, "GET", f"/clients/{name.upper()}.json", auth=True,
                         headers={"X-Client-Token": tok, "X-Client-Serial": ident["serial"], "X-Client-Macs": ",".join(ident["macs"])})
     if status == 200 and isinstance(data, dict):
-        return [a for a in data.get("actions") or [] if isinstance(a, dict) and a.get("token")], True, status
+        return [a for a in data.get("actions") or [] if isinstance(a, dict) and a.get("token")], data, status
     log(f"actions not fetched: {status} {str(data)[:200]}")
-    return [], False, status
+    return [], None, status
+
+
+# ---------- settings from the server ----------
+def _has_jinja(value):
+    if isinstance(value, str):
+        return bool(JINJA_RE.search(value))
+    if isinstance(value, dict):
+        return any(_has_jinja(k) or _has_jinja(v) for k, v in value.items())
+    if isinstance(value, list):
+        return any(_has_jinja(v) for v in value)
+    return False
+
+
+def _read_json(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def apply_settings(cfg, data, errors):
+    """Write the server's settings to fleet_vars_file. Returns (hash to report, changed). If any value is refused nothing is
+    written and the hash is reported as "partial:…", so the server shows the settings as not arrived."""
+    settings = data.get("settings") if isinstance(data.get("settings"), dict) else {}
+    allowed = set(cfg.get("settable") or [])
+    accepted, refused = {}, []
+    for key, value in settings.items():
+        if key not in allowed or _has_jinja(value):
+            refused.append(key)
+        else:
+            accepted[key] = value
+    digest = str(data.get("settings_hash") or "")
+    if refused:
+        # keep the last good state: a refused value means the server and this site disagree, nothing is half applied
+        errors.append("settings refused (not in fleet_settable_vars or Jinja braces): " + ", ".join(sorted(refused)))
+        return "partial:" + digest, False
+    path = cfg.get("vars_file") or ""
+    if not path:
+        return None, False
+    current = _read_json(path)
+    changed = False
+    if accepted and current != accepted:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(accepted, fh, ensure_ascii=False, indent=1, sort_keys=True)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+        changed = True
+    elif not accepted and current is not None:
+        os.unlink(path)
+        changed = True
+    return digest, changed
+
+
+def _yaml():
+    try:
+        import yaml
+        return yaml
+    except ImportError:
+        return None
+
+
+def local_overrides(cfg, settings):
+    """Keys of the settable variables that the per-device override files set (they win over the server). Keys holding
+    exactly the server's value are removed there first: the server took them over (backup next to the file, once)."""
+    yaml = _yaml()
+    allowed = set(cfg.get("settable") or [])
+    found = set()
+    if not yaml or not allowed:
+        return []
+    for path in cfg.get("host_vars_files") or []:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+            data = yaml.safe_load(text) or {}
+        except (OSError, ValueError, yaml.YAMLError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        same = [k for k in data if k in allowed and k in settings and data[k] == settings[k]]
+        if same:
+            backup = path + ".before-fleet"
+            if not os.path.exists(backup):
+                with open(backup, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+            for k in same:
+                data.pop(k)
+            try:
+                with open(path + ".tmp", "w", encoding="utf-8") as fh:
+                    fh.write("# Per-device overrides; values now set by the management server were removed "
+                             f"({', '.join(same)}, backup {os.path.basename(backup)})\n")
+                    if data:
+                        yaml.safe_dump(data, fh, allow_unicode=True, default_flow_style=False, sort_keys=False)
+                os.replace(path + ".tmp", path)
+                log(f"{path}: {', '.join(same)} removed, the server holds the same value")
+            except OSError as exc:
+                log(f"{path}: not cleaned: {exc}")
+        found |= {k for k in data if k in allowed}
+    return sorted(found)
 
 
 def run_actions(actions):
@@ -390,13 +510,24 @@ def main():
     if not name:
         return 0
     tok = token(cfg)
-    actions, fetched, status = fetch_actions(cfg, name, tok, ident)
+    actions, data, status = fetch_actions(cfg, name, tok, ident)
     if status == 403 and enroll(cfg, ident, state):
         # reinstalled device with a new secret: the enrolment key re-admits it for a day, then try once more
-        actions, fetched, status = fetch_actions(cfg, name, tok, ident)
-    done, reboot, errors = run_actions(actions)
-    payload = gather(cfg, name, ident, done, fetched)
-    payload["errors"] = errors
+        actions, data, status = fetch_actions(cfg, name, tok, ident)
+    errors = []
+    settings_hash, settings_changed = state.get("settings_hash"), False
+    if data is not None:
+        settings_hash, settings_changed = apply_settings(cfg, data, errors)
+        state["settings_hash"] = settings_hash
+    overrides = local_overrides(cfg, (data or {}).get("settings") or {})
+    if settings_changed and not any(a.get("type") == "pull-now" for a in actions):
+        log("settings changed: ansible-pull now")
+        run(["systemctl", "start", "--no-block", "ansible-pull.service"])
+    done, reboot, action_errors = run_actions(actions)
+    payload = gather(cfg, name, ident, done, data is not None, state)
+    payload["errors"] = errors + action_errors
+    payload["kiosk"]["settings_hash"] = settings_hash
+    payload["kiosk"]["local_overrides"] = overrides
     status, data = http(cfg, "POST", "/report", payload, headers={"X-Client-Token": tok}, auth=True, timeout=60)
     if status != 200:
         log(f"report refused: {status} {str(data)[:200]}")

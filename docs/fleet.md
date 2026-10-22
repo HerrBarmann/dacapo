@@ -35,6 +35,39 @@ fleet. Keep the profiles' `hostname_prefix` equal to the server's naming
 scheme (lower case): the server renames devices to `<prefix>-NNN`, and the
 playbook recognises the profile by that prefix.
 
+## Settings from the server
+
+The server may also set variables on the devices, for example the bookmarks
+of a library profile or the page a signage display shows. Which variables it
+may set is the site's decision:
+
+```yaml
+fleet_settable_vars:
+  - firefox_managed_bookmarks
+  - monitor_url
+  - output_transform
+```
+
+The server sends the merged values with the actions (`settings`, plus a short
+`settings_hash`). The script writes them to `fleet_vars_file`
+(`<kiosk_state_dir>/fleet-vars.json`) and starts `ansible-pull` when they
+changed. The playbook loads that file after the profile and before the
+per-device overrides (`kiosk_host_vars_files`), so the order is: core
+defaults, `site.yml`, profile, server, `host.yml`. A local `host.yml` stays an
+emergency switch on the device.
+
+Safety: a value for a variable outside `fleet_settable_vars`, or any value
+containing Jinja braces (`{{`, `{%`, `{#`), is refused. Ansible would template
+such a value, so a server could otherwise run commands on the device. If
+anything is refused, the file is left as it was and the device reports
+`partial:<hash>`, so the server sees the settings as not arrived.
+
+Taking over local values: the device reports which settable variables its
+`host.yml` sets (`local_overrides`). When the server holds exactly the same
+value for one of them, the script removes it from `host.yml` (once, with a
+backup `host.yml.before-fleet` next to it); from then on the server manages
+it.
+
 ## What a run does
 
 `/opt/kiosk/kiosk-fleet.py`, started by `kiosk-fleet.timer` one minute after
@@ -70,7 +103,7 @@ over HTTPS. Host names travel in upper case; the device uses lower case.
 |---|---|---|
 | `GET /fleet/hostname?serial=…&mac=…&mac=…` | serial number and MAC addresses | `200 {"hostname", "profile"}` for a known device, else `404` |
 | `POST /fleet/enroll`, header `X-Enroll-Key` | `{"serial", "macs", "model", "profile", "old_hostname"}` | `200 {"state": "approved", "hostname", "profile"}` (created or re-admitted) or `{"state": "waiting", "code", "url"}`; `403` for a wrong key |
-| `GET /clients/<HOSTNAME>.json`, headers `X-Client-Token`, `X-Client-Serial`, `X-Client-Macs` | – | `200 {"actions": [{"type", "token"}, …]}`; `403` if the secret does not match |
+| `GET /clients/<HOSTNAME>.json`, headers `X-Client-Token`, `X-Client-Serial`, `X-Client-Macs` | – | `200 {"actions": [{"type", "token"}, …], "settings": {variable: value}, "settings_hash"}`; `403` if the secret does not match |
 | `POST /report`, header `X-Client-Token` | see below | `200`; `403` if serial/MAC or secret do not match |
 
 Report body: `hostname`, `serial`, `macs`, `model`, `os_version`, `os_build`,
@@ -80,12 +113,15 @@ block `kiosk`:
 
 | Field | Meaning |
 |---|---|
-| `pull_last`, `pull_result`, `pull_commit`, `pull_branch` | last run of `ansible-pull.service` (systemd result) and the checked-out commit |
+| `pull_last`, `pull_result`, `pull_commit`, `pull_branch` | last finished run of `ansible-pull.service` (systemd result) and the checked-out commit |
+| `pull_running` | start time of a run going on right now (absent otherwise) |
 | `last_boot`, `nightly_reboot` | last boot, scheduled reboot time |
 | `updates_pending`, `updates_security` | packages waiting according to `apt-get -s upgrade`, of which security updates |
 | `disk_size_gb`, `disk_free_gb`, `load` | root file system, 1-minute load |
 | `firefox_version`, `core_version` | Firefox ESR, `dacapo_version` |
 | `monitor_url`, `monitor_ok` | display profiles: the local display service delivers a page |
+| `settings_hash` | hash of the settings in `fleet_vars_file` (`partial:…` if some were refused) |
+| `local_overrides` | settable variables that a per-device override file sets |
 
 Unknown action types are acknowledged and ignored, so a server can add new
 ones without breaking older devices.

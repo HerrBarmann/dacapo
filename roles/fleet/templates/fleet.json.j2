@@ -8,5 +8,8 @@
   "nightly_reboot": nightly_reboot_time | string,
   "monitor_port": (monitor_port | default(8081) | int) if (monitor_enabled | default(false) | bool) else 0,
   "monitor_url": (monitor_url | default('')) if (monitor_enabled | default(false) | bool) else '',
-  "core_version": dacapo_version | default('')
+  "core_version": dacapo_version | default(''),
+  "settable": fleet_settable_vars | default([]),
+  "vars_file": fleet_vars_file,
+  "host_vars_files": kiosk_host_vars_files | default([])
 } | to_nice_json(indent=2) }}
