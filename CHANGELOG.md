@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1 — unreleased
+
+- fleet: `fleet_enabled: false` now switches the reporter off on the devices:
+  the role stops and removes `kiosk-fleet.timer`, the service, the
+  configuration and the server's settings file. Before, the role was just
+  skipped and the timer kept running. The device secret stays, so switching
+  back on needs no new admission. The role therefore runs on every device.
+- `dacapo_version` 0.3.1 (matches the reporter version)
+
 ## 0.3.0 — unreleased
 
 - fleet: a pull going on right now is reported as `pull_running` (start
