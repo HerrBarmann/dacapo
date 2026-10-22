@@ -8,6 +8,8 @@
   skipped and the timer kept running. The device secret stays, so switching
   back on needs no new admission. The role therefore runs on every device.
 - `dacapo_version` 0.3.1 (matches the reporter version)
+- bar: the host name is re-read every 5 minutes instead of once, so a device
+  renamed by the management server shows its new name without a restart
 
 ## 0.3.0 — unreleased
 
