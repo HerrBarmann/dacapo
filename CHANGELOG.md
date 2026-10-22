@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0 — unreleased
+
+- new role `fleet` (optional, `fleet_enabled`): the device reports to a
+  Partitur server, takes its name and profile from there and runs the
+  actions requested there (pull now, install updates now, reboot). Script
+  `kiosk-fleet.py`, timer every `fleet_report_interval`; credentials in
+  `secrets.yml` (`fleet_enroll_key`, `fleet_repo_user`, `fleet_repo_password`);
+  the role stays idle while one of them is empty. `dacapo_version` in
+  `vars/defaults.yml`. Self-adoption of unknown devices and re-admission
+  after a reinstall via the enrolment key. HTTP contract in `docs/fleet.md`,
+  so any server speaking it can manage a fleet.
+
 ## 0.1.1 — 2026-10-22
 
 - **fix:** the idle reset and input during the countdown killed `swayidle`

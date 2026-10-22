@@ -29,7 +29,7 @@ Defaults in `core/vars/defaults.yml`; everything can also be set site-wide.
 | Variable | Meaning |
 |---|---|
 | `kiosk_profile_title` | human-readable name (boot menu, sway config header) |
-| `hostname_prefix` | installer names devices `<prefix>-<MAC suffix>`; used for detection |
+| `hostname_prefix` | installer names devices `<prefix>-<MAC suffix>`; used for detection. With fleet reporting the server renames the device to `<prefix>-NNN`; keep the prefix equal to the server's (lower case) |
 | `idle_reset_enabled`, `idle_seconds`, `idle_warn_seconds` | reset after inactivity; countdown popup `idle_warn_seconds` before |
 | `screensaver_enabled`, `screensaver_seconds` | random image from `site/wallpaper/` on an empty workspace |
 | `screen_off_enabled`, `screen_off_seconds` | DPMS off |

@@ -1,0 +1,14 @@
+# /etc/systemd/system/kiosk-fleet.service (deployed by ansible-pull)
+# Reports this device to the Partitur server {{ fleet_url }} and carries out
+# the actions requested there (see /opt/kiosk/kiosk-fleet.py). Started by
+# kiosk-fleet.timer; a run that installs updates may take a while.
+[Unit]
+Description={{ kiosk_brand_name }} fleet report
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment="FLEET_CONFIG={{ fleet_config_file }}"
+ExecStart=/usr/bin/python3 -I /opt/kiosk/kiosk-fleet.py
+TimeoutStartSec=60min

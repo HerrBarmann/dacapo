@@ -10,6 +10,7 @@
 | session reset | after `idle_seconds` idle, popup `idle_warn_seconds` before | profile |
 | screensaver / screen off | after `screensaver_seconds` / `screen_off_seconds` | profile |
 | display refresh | every `monitor_refresh_minutes`, page polls locally every 30 s | profile |
+| fleet report (optional) | 2 min after boot, then every `fleet_report_interval` (+0–2 min random) | `fleet_*` |
 
 Rule of thumb: what is pushed before 04:00 is active on every device the next
 morning. Check with `systemctl list-timers`.
@@ -35,6 +36,13 @@ Force a pull: `sudo systemctl start ansible-pull.service`. Test a branch on
 one device: edit `--checkout` in `/etc/systemd/system/ansible-pull.service`
 (the next pull from `main` reverts it) or set `kiosk_pull_branch` in a
 per-device override.
+
+## Fleet reporting
+
+Optional, role `fleet`: devices report to a management server and run the
+actions requested there. Setup, behaviour and the HTTP contract are in
+[fleet.md](fleet.md). Check with `journalctl -u kiosk-fleet`, run now with
+`sudo systemctl start kiosk-fleet.service`.
 
 ## Testing a change before pushing
 

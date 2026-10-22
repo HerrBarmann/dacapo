@@ -1,0 +1,12 @@
+{{ {
+  "url": fleet_url,
+  "repo_user": fleet_repo_user,
+  "repo_password": fleet_repo_password,
+  "enroll_key": fleet_enroll_key,
+  "profile_file": kiosk_profile_file,
+  "state_dir": fleet_state_dir,
+  "nightly_reboot": nightly_reboot_time | string,
+  "monitor_port": (monitor_port | default(8081) | int) if (monitor_enabled | default(false) | bool) else 0,
+  "monitor_url": (monitor_url | default('')) if (monitor_enabled | default(false) | bool) else '',
+  "core_version": dacapo_version | default('')
+} | to_nice_json(indent=2) }}

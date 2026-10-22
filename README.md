@@ -65,7 +65,8 @@ your-kiosk-site/                 (private)          dacapo/            (public, 
 │   ├── profiles/       browser.yml app.yml ...      │   ├── session   sway, waybar, idle popup, screensaver
 │   ├── templates/      home pages (Jinja2)          │   ├── firefox   policies, profile template, extensions
 │   ├── assets/ fonts/ wallpaper/                    │   ├── usbmanager  USB drives from the browser
-│   └── files/          authorized_keys, ca.crt      │   └── monitor   display service for signage
+│   └── files/          authorized_keys, ca.crt      │   ├── monitor   display service for signage
+│                                                    │   └── fleet     optional reporting to a management server
 └── README.md                                       ├── preseed/  raspberry/  tests/  tools/  docs/
 ```
 
@@ -122,6 +123,7 @@ Then build an installer and roll out: [docs/deployment.md](docs/deployment.md).
 | [docs/profiles.md](docs/profiles.md) | profiles and all switches, the three Firefox modes, extensions, policies, per-device overrides |
 | [docs/deployment.md](docs/deployment.md) | installer ISO (PC, one ISO with boot menu or dedicated sticks), Raspberry Pi SD card, acceptance test |
 | [docs/operations.md](docs/operations.md) | daily operation: what runs when, changing things, troubleshooting, hardening |
+| [docs/fleet.md](docs/fleet.md) | optional fleet reporting to a management server: names, state, remote actions, HTTP contract |
 | [examples/site-demo/](examples/site-demo/) | the demo site |
 | [vars/defaults.yml](vars/defaults.yml) | every variable with its default and a comment |
 | [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CHANGELOG.md](CHANGELOG.md) | contributing, reporting, releases |
