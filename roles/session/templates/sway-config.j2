@@ -83,12 +83,13 @@ exec mako -c /etc/xdg/mako/config
 # Warning: centred popup with countdown (mako, overlay layer — does not move
 # the screen content). Important: start in the background (&) — swayidle -w
 # would otherwise wait for the script and the reset timeout would never fire.
-# On input (resume) the script is killed and the popup closed immediately.
+# On input (resume) "kiosk-idle-warn.sh stop" ends exactly that script (PID
+# file) and closes the popup — never pkill -f: it would match swayidle itself.
 # Screensaver and screen off end with the first mouse or keyboard input.
 {% set idle_lines = [] %}
 {% if idle_reset_enabled | bool %}
 {%   set _ = idle_lines.append("timeout " ~ (idle_seconds - idle_warn_seconds) ~ " '/usr/local/bin/kiosk-idle-warn.sh &'") %}
-{%   set _ = idle_lines.append("resume 'pkill -u " ~ kiosk_user ~ " -f kiosk-idle-warn.sh; makoctl dismiss -a'") %}
+{%   set _ = idle_lines.append("resume '/usr/local/bin/kiosk-idle-warn.sh stop'") %}
 {%   set _ = idle_lines.append("timeout " ~ idle_seconds ~ " '/usr/local/bin/kiosk-reset.sh'") %}
 {% endif %}
 {% if screensaver_enabled | bool %}

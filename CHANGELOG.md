@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.1 — 2026-10-22
+
+- **fix:** the idle reset and input during the countdown killed `swayidle`
+  itself (`pkill -f kiosk-idle-warn.sh` matched swayidle's own command line).
+  After the first reset a device had no further reset, no screensaver and no
+  screen-off until the next reboot. `kiosk-idle-warn.sh stop` now ends exactly
+  the countdown process via a PID file; sway resume and `kiosk-reset.sh` use it.
+  Devices need a reboot (or a new session) to get the fixed swayidle line.
+- new `tests/idle-chain-test.sh`: runs warning, input, reset and screensaver
+  in a live headless sway session; part of CI
+- build-iso: the placeholder check ignores comment lines
+- base: enable `non-free-firmware` before installing firmware on x86_64
+
 ## 0.1.0 — 2026-10-21
 
 First public release, extracted from the kiosk fleet of the Hochschule für

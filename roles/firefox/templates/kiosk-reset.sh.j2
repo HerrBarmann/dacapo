@@ -9,11 +9,12 @@
 # volatile profile leftovers and restarts the browser cleanly.
 set -u
 
-# Close a running idle warning (countdown popup). makoctl needs the session
-# bus (works from waybar/swayidle); otherwise the popup disappears after the
-# default-timeout of the mako config on its own.
-pkill -u {{ kiosk_user }} -f kiosk-idle-warn.sh 2>/dev/null
-makoctl dismiss -a 2>/dev/null
+# Close a running idle warning (countdown popup). Via the script's own "stop"
+# (PID file) — never pkill -f: swayidle carries the script path in its command
+# line and would be killed with it (see kiosk-idle-warn.sh).
+if [ -x /usr/local/bin/kiosk-idle-warn.sh ]; then
+    /usr/local/bin/kiosk-idle-warn.sh stop
+fi
 
 # End Firefox (all instances of the kiosk user). Wait at most 3 s for a clean
 # exit, then force it.

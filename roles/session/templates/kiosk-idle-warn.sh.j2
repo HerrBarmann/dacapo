@@ -3,9 +3,43 @@
 # (Jinja2 template roles/session/templates/kiosk-idle-warn.sh.j2)
 # Called by swayidle {{ idle_warn_seconds }} s before the session reset (in
 # the background, see /etc/sway/config). Refreshes the message every second
-# through the same notification (mako). On input swayidle (resume) kills this
-# script and closes the popup. Texts: text_idle_* in the site.
+# through the same notification (mako). Texts: text_idle_* in the site.
+#
+#   kiosk-idle-warn.sh        start the countdown
+#   kiosk-idle-warn.sh stop   end a running countdown and close the popup
+#                             (swayidle resume on input, kiosk-reset.sh)
+#
+# "stop" uses a PID file on purpose, NEVER "pkill -f kiosk-idle-warn": swayidle
+# carries this script's path in its own command line, so a pattern match kills
+# the idle watchdog itself — after that there is no reset, no screensaver and
+# no screen-off until the next reboot (tests/idle-chain-test.sh guards this).
 set -u
+
+PIDFILE="${XDG_RUNTIME_DIR:-/tmp}/kiosk-idle-warn.pid"
+
+# Is PID $1 really this countdown script? (guards against a stale PID file
+# whose number was reused by another process of the kiosk user)
+is_countdown() {
+    [ -n "$1" ] && [ -r "/proc/$1/cmdline" ] || return 1
+    tr '\0' '\n' < "/proc/$1/cmdline" | head -n 2 | grep -q 'kiosk-idle-warn\.sh$'
+}
+
+if [ "${1:-}" = stop ]; then
+    pid=$(cat "$PIDFILE" 2>/dev/null)
+    if is_countdown "$pid"; then
+        kill "$pid" 2>/dev/null
+        for _ in 1 2 3 4 5 6 7 8 9 10; do      # max. ~1 s until it is gone
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 0.1
+        done
+    fi
+    rm -f "$PIDFILE"
+    makoctl dismiss -a 2>/dev/null           # only now: no update can follow
+    exit 0
+fi
+echo $$ > "$PIDFILE"
+trap 'rm -f "$PIDFILE"; exit 0' TERM INT
+trap 'rm -f "$PIDFILE"' EXIT
 
 SECS={{ idle_warn_seconds }}
 ICON=/opt/kiosk/homepage/assets/{{ kiosk_logo_light }}

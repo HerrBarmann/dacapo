@@ -132,6 +132,7 @@ Then build an installer and roll out: [docs/deployment.md](docs/deployment.md).
 ansible-lint local.yml roles/ vars/ tests/render.yml
 for p in browser app display; do ansible-playbook -i localhost, tests/render.yml -e profile=$p; done
 tests/docker-test.sh app          # also: browser | display; SKIP_PACKAGES=1 for a fast run
+tests/idle-chain-test.sh app      # live headless session: idle warning, input, reset, screensaver
 tests/compare-render.sh <expected-dir> <actual-dir> [rename-map]   # compare two renderings
 ```
 

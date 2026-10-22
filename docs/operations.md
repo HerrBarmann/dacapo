@@ -43,6 +43,7 @@ ansible-playbook --syntax-check -i localhost, core/local.yml
 ansible-lint core/local.yml core/roles/ core/vars/
 ansible-playbook -i localhost, core/tests/render.yml -e site=site -e profile=browser   # -> core/tests/out/site/browser/
 core/tests/docker-test.sh browser site        # full run in debian:trixie, twice (idempotence)
+core/tests/idle-chain-test.sh browser site    # live session: idle warning, input, reset, screensaver
 ```
 
 ## Troubleshooting

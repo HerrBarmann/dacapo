@@ -14,6 +14,10 @@ roles, a demo site. Keep it that way.
   unconditional `state: started`.
 - **Idempotence.** Two consecutive runs must report `changed=0` on the
   second. `tests/docker-test.sh` checks this.
+- **Never `pkill -f` a script that swayidle runs.** swayidle carries every
+  command in its own command line; a pattern match kills the idle watchdog.
+  Stop such scripts by PID (see `kiosk-idle-warn.sh stop`).
+  `tests/idle-chain-test.sh` runs the chain in a live session and catches it.
 - **English** in code, comments, docs and commit messages.
 
 ## Before you open a pull request
@@ -23,6 +27,7 @@ ansible-playbook --syntax-check -i localhost, local.yml
 ansible-lint local.yml roles/ vars/ tests/render.yml
 for p in browser app display; do ansible-playbook -i localhost, tests/render.yml -e profile=$p; done
 tests/docker-test.sh browser        # and app, display — full run in debian:trixie
+tests/idle-chain-test.sh browser    # and app — live idle warning, reset, screensaver
 shellcheck -S warning preseed/*.sh raspberry/*.sh tests/*.sh tools/*.sh
 ```
 

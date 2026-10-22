@@ -114,4 +114,5 @@ if needed. The installer picks it up automatically (boot menu entry with
 ```bash
 ansible-playbook -i localhost, tests/render.yml -e profile=<name> -e site=../site
 tests/docker-test.sh <name> ../site
+tests/idle-chain-test.sh <name> ../site
 ```
