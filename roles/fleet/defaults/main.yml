@@ -1,0 +1,5 @@
+---
+# Role fleet — reporting to a Partitur server. Switches: fleet_* in
+# vars/defaults.yml (site.yml / secrets.yml). Only paths live here.
+fleet_config_file: "{{ kiosk_state_dir }}/fleet.json"
+fleet_state_dir: /var/lib/kiosk-fleet

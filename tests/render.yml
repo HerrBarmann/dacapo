@@ -35,6 +35,7 @@
         - "{{ repo }}/roles/firefox/defaults/main.yml"
         - "{{ repo }}/roles/usbmanager/defaults/main.yml"
         - "{{ repo }}/roles/monitor/defaults/main.yml"
+        - "{{ repo }}/roles/fleet/defaults/main.yml"
 
     - name: Load site variables
       ansible.builtin.include_vars:
@@ -87,6 +88,9 @@
         - { src: "{{ repo }}/roles/base/templates/nightly-reboot.timer.j2", dest: nightly-reboot.timer }
         - { src: "{{ repo }}/roles/base/templates/profile-kiosk-sway.sh.j2", dest: profile-kiosk-sway.sh }
         - { src: "{{ repo }}/roles/monitor/templates/kiosk-monitor.service.j2", dest: kiosk-monitor.service }
+        - { src: "{{ repo }}/roles/fleet/templates/kiosk-fleet.service.j2", dest: kiosk-fleet.service }
+        - { src: "{{ repo }}/roles/fleet/templates/kiosk-fleet.timer.j2", dest: kiosk-fleet.timer }
+        - { src: "{{ repo }}/roles/fleet/templates/fleet.json.j2", dest: fleet.json }
       loop_control:
         label: "{{ item.dest }}"
 
@@ -101,6 +105,11 @@
         content: "{{ {'texts': usbmanager_texts_default | combine(usbmanager_texts), 'style': usbmanager_style_default | combine(usbmanager_style)} | to_nice_json(indent=2) }}\n"
         dest: "{{ out }}/usbmanager.json"
         mode: "0644"
+
+    - name: Fleet config must be valid JSON
+      ansible.builtin.assert:
+        that: (lookup('ansible.builtin.file', out ~ '/fleet.json') | from_json) is mapping
+        quiet: true
 
     - name: Waybar config must be valid JSON
       ansible.builtin.assert:

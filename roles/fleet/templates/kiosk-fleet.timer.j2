@@ -1,0 +1,16 @@
+# /etc/systemd/system/kiosk-fleet.timer (deployed by ansible-pull)
+# Report interval: {{ fleet_report_interval }} + boot trigger; the random
+# delay spreads the reports of a fleet.
+[Unit]
+Description={{ kiosk_brand_name }} fleet report timer
+
+[Timer]
+# first run one minute after the timer is set up (devices that have been running for days), then after boot
+OnActiveSec=1min
+OnBootSec=2min
+OnUnitActiveSec={{ fleet_report_interval }}
+RandomizedDelaySec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

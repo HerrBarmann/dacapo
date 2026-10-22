@@ -1,0 +1,61 @@
+---
+# ============================================================================
+# Role fleet — the device reports to a Partitur server and takes its name,
+# profile and actions from there (kiosk-fleet.py). Optional: only with
+# fleet_enabled, and only once the site has filled in the credentials
+# (fleet_enroll_key, fleet_repo_user, fleet_repo_password in secrets.yml);
+# without them the role warns and leaves the device alone, so a half-filled
+# site never breaks the pull of a whole fleet.
+# ============================================================================
+- name: Fleet reporting without credentials
+  ansible.builtin.debug:
+    msg: "fleet_enabled is set but fleet_url, fleet_enroll_key, fleet_repo_user or fleet_repo_password is empty: not reporting"
+  when: not _fleet_ready
+
+- name: Fleet reporting
+  when: _fleet_ready
+  block:
+    - name: Fleet state directory
+      ansible.builtin.file:
+        path: "{{ fleet_state_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Fleet reporter script
+      ansible.builtin.copy:
+        src: kiosk-fleet.py
+        dest: /opt/kiosk/kiosk-fleet.py
+        mode: "0755"
+
+    - name: Fleet configuration (credentials, root only)
+      ansible.builtin.template:
+        src: fleet.json.j2
+        dest: "{{ fleet_config_file }}"
+        mode: "0600"
+      no_log: true
+
+    - name: Fleet service unit
+      ansible.builtin.template:
+        src: kiosk-fleet.service.j2
+        dest: /etc/systemd/system/kiosk-fleet.service
+        mode: "0644"
+      notify: Restart kiosk-fleet timer
+
+    - name: Fleet timer unit
+      ansible.builtin.template:
+        src: kiosk-fleet.timer.j2
+        dest: /etc/systemd/system/kiosk-fleet.timer
+        mode: "0644"
+      notify: Restart kiosk-fleet timer
+
+    - name: Enable kiosk-fleet.timer
+      ansible.builtin.command: systemctl enable kiosk-fleet.timer  # noqa: command-instead-of-module (chroot-safe)
+      args:
+        creates: /etc/systemd/system/timers.target.wants/kiosk-fleet.timer
+
+    - name: Start kiosk-fleet.timer (running system only)
+      ansible.builtin.systemd_service:
+        name: kiosk-fleet.timer
+        state: started
+        daemon_reload: true
+      when: not in_chroot | bool

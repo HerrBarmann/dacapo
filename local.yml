@@ -148,3 +148,5 @@
       when: usb_enabled | bool
     - role: monitor
       when: monitor_enabled | bool
+    - role: fleet
+      when: fleet_enabled | bool

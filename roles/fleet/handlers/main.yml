@@ -1,0 +1,7 @@
+---
+- name: Restart kiosk-fleet timer
+  ansible.builtin.systemd_service:
+    name: kiosk-fleet.timer
+    state: restarted
+    daemon_reload: true
+  when: not in_chroot | bool

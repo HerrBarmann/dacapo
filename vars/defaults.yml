@@ -102,6 +102,22 @@ nightly_reboot_time: "04:00"
 apt_update_lists_time: "02:30"
 apt_upgrade_time: "03:00"
 
+# ---- Fleet reporting (optional, role fleet) ---------------------------------
+# Report to a management server (reference: Partitur; contract in
+# docs/fleet.md): the device takes its name and profile from there, reports every
+# fleet_report_interval (state, pull result, updates, disk, display) and runs
+# the actions requested there (pull now, install updates now, reboot). The
+# device identifies itself with serial number and MAC addresses plus a secret
+# it generates on first contact. The credentials belong in secrets.yml; the
+# role does nothing while one of them is empty.
+fleet_enabled: false
+fleet_url: ""                         # https://partitur.example.org (no path)
+fleet_report_interval: 15min
+fleet_enroll_key: ""                  # secrets.yml: enrolment key issued in Partitur (new devices wait there for the admin)
+fleet_repo_user: ""                   # secrets.yml: shared credentials of the Partitur package repository
+fleet_repo_password: ""
+dacapo_version: "0.2.0"               # shown by Partitur next to the device
+
 # ---- Network ----------------------------------------------------------------
 # Wi-Fi fallback where no Ethernet is available: a wpa_supplicant network
 # block in <site>/files/wpa-kiosk-wlan.conf (WPA2 Enterprise or PSK).

@@ -72,6 +72,9 @@ kiosk_pull_url: "https://gitlab+deploy-token-1:gldt-xxxx@git.example.org/org/kio
 kiosk_pull_branch: main
 kiosk_pull_playbook: core/local.yml
 install_admin_password_hash: "$6$..."     # mkpasswd --method=sha-512
+fleet_enroll_key: ""                      # optional, role fleet: enrolment key issued in Partitur
+fleet_repo_user: ""                       # optional, role fleet: repository credentials of the Partitur server
+fleet_repo_password: ""
 ```
 
 The pull URL ends up in `/etc/systemd/system/ansible-pull.service` (mode

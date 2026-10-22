@@ -41,7 +41,7 @@ jobs:
           shellcheck -S warning -s bash tests/out/site-demo/browser/kiosk-firefox.sh tests/out/site-demo/browser/kiosk-reset.sh \
             tests/out/site-demo/browser/kiosk-idle-warn.sh tests/out/site-demo/browser/kiosk-screensaver.sh
       - name: Python
-        run: python3 -m py_compile roles/monitor/files/kiosk-monitor.py roles/usbmanager/files/usbmanager.py tools/screenshots/compose.py
+        run: python3 -m py_compile roles/monitor/files/kiosk-monitor.py roles/usbmanager/files/usbmanager.py roles/fleet/files/kiosk-fleet.py tools/screenshots/compose.py
       - name: Raspberry Pi firstrun (with a non-placeholder pull URL)
         run: |
           cp -r examples/site-demo /tmp/site
