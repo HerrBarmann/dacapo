@@ -27,8 +27,15 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
       - name: Syntax check
         run: ansible-playbook --syntax-check -i localhost, local.yml
+      # One ansible-lint call per role: for every role ansible-lint runs its own
+      # ansible-playbook syntax check, in parallel (one per CPU). On GitHub's
+      # runners such a check can take several GB, and six at once exhausted the
+      # runner's memory (killed with exit 143, October 2026). Sequential calls
+      # lint the same files.
       - name: ansible-lint
-        run: ansible-lint local.yml roles/ vars/ tests/render.yml
+        run: |
+          ansible-lint local.yml vars/ tests/render.yml
+          for role in roles/*/; do ansible-lint "$role"; done
       - name: Render all demo profiles
         run: |
           for p in examples/site-demo/profiles/*.yml; do
