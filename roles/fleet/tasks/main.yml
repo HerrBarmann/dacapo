@@ -1,19 +1,44 @@
 ---
 # ============================================================================
-# Role fleet — the device reports to a Partitur server and takes its name,
-# profile and actions from there (kiosk-fleet.py). Optional: only with
-# fleet_enabled, and only once the site has filled in the credentials
-# (fleet_enroll_key, fleet_repo_user, fleet_repo_password in secrets.yml);
-# without them the role warns and leaves the device alone, so a half-filled
-# site never breaks the pull of a whole fleet.
+# Role fleet — the device reports to a management server and takes its name,
+# profile, settings and actions from there (kiosk-fleet.py, docs/fleet.md).
+# Runs on every device: with fleet_enabled and complete credentials
+# (fleet_enroll_key, fleet_repo_user, fleet_repo_password in secrets.yml) it
+# sets the reporter up; with fleet_enabled false it stops and removes the
+# timer, the service and the server's settings again (the device secret in
+# fleet_state_dir stays, so switching back on needs no new admission). With
+# fleet_enabled but missing credentials it only warns, so a half-filled site
+# never breaks the pull of a whole fleet.
 # ============================================================================
+- name: Fleet reporting switched off
+  when: not (fleet_enabled | bool)
+  block:
+    - name: Stop kiosk-fleet.timer (running system only)
+      ansible.builtin.systemd_service:
+        name: kiosk-fleet.timer
+        state: stopped
+      failed_when: false
+      when: not in_chroot | bool
+
+    - name: Remove the fleet timer, service, configuration and settings
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/systemd/system/timers.target.wants/kiosk-fleet.timer
+        - /etc/systemd/system/kiosk-fleet.timer
+        - /etc/systemd/system/kiosk-fleet.service
+        - "{{ fleet_config_file }}"
+        - "{{ fleet_vars_file }}"
+      notify: Reload systemd for fleet
+
 - name: Fleet reporting without credentials
   ansible.builtin.debug:
     msg: "fleet_enabled is set but fleet_url, fleet_enroll_key, fleet_repo_user or fleet_repo_password is empty: not reporting"
-  when: not _fleet_ready
+  when: (fleet_enabled | bool) and not _fleet_ready
 
 - name: Fleet reporting
-  when: _fleet_ready
+  when: (fleet_enabled | bool) and _fleet_ready
   block:
     - name: Fleet state directory
       ansible.builtin.file:

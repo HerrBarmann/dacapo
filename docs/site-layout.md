@@ -40,6 +40,7 @@ core/vars/defaults.yml        every variable, documented default
 site/site.yml                 your fleet
 site/secrets.yml              pull URL, admin hash (loaded with no_log)
 site/profiles/<profile>.yml   the kiosk type of this device
+/etc/kiosk/fleet-vars.json    settings from a management server (role fleet, fleet_settable_vars only; docs/fleet.md)
 /etc/kiosk/host.yml           optional per-device override (root writes it)
 /boot/firmware/kiosk.yml      optional per-device override on a Raspberry Pi boot partition
 -e key=value                  command line (installer, tests)

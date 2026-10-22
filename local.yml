@@ -162,5 +162,4 @@
       when: usb_enabled | bool
     - role: monitor
       when: monitor_enabled | bool
-    - role: fleet
-      when: fleet_enabled | bool
+    - role: fleet          # always: switches the reporter on or removes it again (fleet_enabled)
