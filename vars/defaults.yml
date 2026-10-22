@@ -116,7 +116,14 @@ fleet_report_interval: 15min
 fleet_enroll_key: ""                  # secrets.yml: enrolment key issued in Partitur (new devices wait there for the admin)
 fleet_repo_user: ""                   # secrets.yml: shared credentials of the Partitur package repository
 fleet_repo_password: ""
-dacapo_version: "0.2.0"               # shown by Partitur next to the device
+dacapo_version: "0.3.0"               # shown by the management server next to the device
+# Settings the management server may set on the devices (variable names, e.g.
+# firefox_managed_bookmarks, monitor_url). The reporter writes them to
+# fleet_vars_file; the playbook loads it after the profile and before the
+# per-device overrides (kiosk_host_vars_files), which still win. Values with
+# Jinja braces are refused. Empty list = the server cannot set anything.
+fleet_settable_vars: []
+fleet_vars_file: "{{ kiosk_state_dir }}/fleet-vars.json"
 
 # ---- Network ----------------------------------------------------------------
 # Wi-Fi fallback where no Ethernet is available: a wpa_supplicant network

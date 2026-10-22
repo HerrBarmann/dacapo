@@ -126,6 +126,20 @@
       ansible.builtin.include_vars:
         file: "{{ kiosk_site_dir }}/profiles/{{ kiosk_profile }}.yml"
 
+    # Settings from the management server (role fleet, docs/fleet.md): above the
+    # profile, below the per-device overrides. kiosk-fleet.py writes only
+    # variables listed in fleet_settable_vars and refuses Jinja braces.
+    - name: Check fleet settings
+      ansible.builtin.stat:
+        path: "{{ fleet_vars_file }}"
+      register: _fleet_vars_stat
+      when: fleet_enabled | bool
+
+    - name: Load fleet settings
+      ansible.builtin.include_vars:
+        file: "{{ fleet_vars_file }}"
+      when: (fleet_enabled | bool) and _fleet_vars_stat.stat.exists
+
     - name: Check per-device overrides
       ansible.builtin.stat:
         path: "{{ item }}"

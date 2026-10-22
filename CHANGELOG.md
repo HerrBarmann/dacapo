@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0 — unreleased
+
+- fleet: a pull going on right now is reported as `pull_running` (start
+  time); `pull_last`/`pull_result` keep the last finished run instead of
+  disappearing while systemd clears the end time.
+
+- fleet: the server may set variables listed in `fleet_settable_vars`
+  (bookmarks, display URL, rotation …). The reporter writes them to
+  `fleet_vars_file`, loaded after the profile and before `host.yml`, and runs
+  `ansible-pull` when they changed. Values with Jinja braces or outside the
+  list are refused and leave the file untouched. Values in `host.yml` equal to
+  the server's are removed there (backup `*.before-fleet`). Reports `settings_hash` and
+  `local_overrides`.
+
 ## 0.2.0 — unreleased
 
 - new role `fleet` (optional, `fleet_enabled`): the device reports to a
