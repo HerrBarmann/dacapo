@@ -38,7 +38,7 @@ exit 0
 {% else %}
 # Restart Firefox (into the running sway session) — the start wrapper copies
 # the prepared profile template. Find the SWAYSOCK of the kiosk user.
-SOCK=$(ls /run/user/$(id -u {{ kiosk_user }})/sway-ipc.*.sock 2>/dev/null | head -n1)
+SOCK=$(ls "/run/user/$(id -u {{ kiosk_user }})"/sway-ipc.*.sock 2>/dev/null | head -n1)
 if [ -n "${SOCK:-}" ]; then
     SWAYSOCK="$SOCK" swaymsg exec '/usr/local/bin/kiosk-firefox.sh'
 fi
